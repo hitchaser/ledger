@@ -1,0 +1,220 @@
+import os
+import json
+import asyncio
+import logging
+from contextlib import asynccontextmanager
+from datetime import datetime, timezone
+from typing import List
+
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.staticfiles import StaticFiles
+from starlette.responses import FileResponse
+
+from database import engine, SessionLocal, Base
+from models import AIJob, CaptureItem, Person, Project, CaptureItemPerson, CaptureItemProject, LinkSource
+from services.ai_service import classify_capture, AI_CONFIDENCE_AUTO_RESOLVE, AI_CONFIDENCE_SUGGEST
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("ledger")
+
+# Create tables
+Base.metadata.create_all(bind=engine)
+
+
+# ── WebSocket Manager ──
+
+class ConnectionManager:
+    def __init__(self):
+        self.connections: List[WebSocket] = []
+
+    async def connect(self, ws: WebSocket):
+        await ws.accept()
+        self.connections.append(ws)
+
+    def disconnect(self, ws: WebSocket):
+        self.connections.remove(ws)
+
+    async def broadcast(self, message: dict):
+        for ws in self.connections[:]:
+            try:
+                await ws.send_json(message)
+            except Exception:
+                self.connections.remove(ws)
+
+manager = ConnectionManager()
+
+
+# ── AI Worker ──
+
+async def ai_worker():
+    """Background worker that processes AI classification jobs."""
+    while True:
+        try:
+            db = SessionLocal()
+            job = db.query(AIJob).filter(AIJob.status == "pending").order_by(AIJob.created_at).first()
+            if job:
+                job.status = "processing"
+                db.commit()
+
+                item = db.query(CaptureItem).filter(CaptureItem.id == job.capture_item_id).first()
+                if not item:
+                    job.status = "done"
+                    db.commit()
+                    db.close()
+                    continue
+
+                # Get context
+                people = db.query(Person).filter(Person.is_archived == False).all()
+                projects = db.query(Project).filter(Project.is_archived == False).all()
+                people_names = [p.display_name for p in people]
+                project_names = [f"{p.name}" + (f" ({p.short_code})" if p.short_code else "") for p in projects]
+
+                # Get open items for resolution matching
+                open_items = db.query(CaptureItem).filter(
+                    CaptureItem.status == "open",
+                    CaptureItem.id != item.id,
+                ).order_by(CaptureItem.created_at.desc()).limit(50).all()
+                open_context = "\n".join(f"- {i.id}: {i.raw_text[:100]}" for i in open_items)
+
+                result = classify_capture(item.raw_text, people_names, project_names, open_context)
+
+                if result:
+                    if result.get("item_type"):
+                        item.item_type = result["item_type"]
+                    if result.get("urgency"):
+                        item.urgency = result["urgency"]
+                    item.ai_confidence = result.get("confidence", 0.0)
+                    item.ai_processed_at = datetime.now(timezone.utc)
+
+                    # Link people
+                    for name in result.get("linked_people", []):
+                        person = db.query(Person).filter(
+                            Person.display_name.ilike(name),
+                            Person.is_archived == False,
+                        ).first()
+                        if person:
+                            existing = db.query(CaptureItemPerson).filter_by(
+                                capture_item_id=item.id, person_id=person.id
+                            ).first()
+                            if not existing:
+                                db.add(CaptureItemPerson(
+                                    capture_item_id=item.id, person_id=person.id,
+                                    link_source=LinkSource.ai
+                                ))
+
+                    # Link projects
+                    for name in result.get("linked_projects", []):
+                        project = db.query(Project).filter(
+                            Project.is_archived == False,
+                            Project.name.ilike(f"%{name}%"),
+                        ).first()
+                        if not project:
+                            project = db.query(Project).filter(
+                                Project.short_code.ilike(name),
+                                Project.is_archived == False,
+                            ).first()
+                        if project:
+                            existing = db.query(CaptureItemProject).filter_by(
+                                capture_item_id=item.id, project_id=project.id
+                            ).first()
+                            if not existing:
+                                db.add(CaptureItemProject(
+                                    capture_item_id=item.id, project_id=project.id,
+                                    link_source=LinkSource.ai
+                                ))
+
+                    # Handle profile updates
+                    if result.get("item_type") == "profile_update":
+                        item.status = "done"
+                        item.resolved_at = datetime.now(timezone.utc)
+
+                    job.status = "done"
+                    db.commit()
+
+                    # Broadcast update via WebSocket
+                    from routers.captures import item_to_response
+                    db.refresh(item)
+                    await manager.broadcast({
+                        "type": "item_updated",
+                        "item": json.loads(json.dumps(item_to_response(item), default=str)),
+                    })
+
+                    # Handle resolution candidates
+                    candidates = result.get("resolution_candidates", [])
+                    confidence = result.get("confidence", 0.0)
+                    if candidates and confidence >= AI_CONFIDENCE_SUGGEST:
+                        await manager.broadcast({
+                            "type": "resolution_suggestion",
+                            "new_item_id": str(item.id),
+                            "candidate_ids": candidates,
+                            "confidence": confidence,
+                            "auto_resolve": confidence >= AI_CONFIDENCE_AUTO_RESOLVE,
+                        })
+
+                else:
+                    job.status = "failed"
+                    job.error = "No result from AI"
+                    db.commit()
+
+            db.close()
+        except Exception as e:
+            logger.error(f"AI worker error: {e}")
+        await asyncio.sleep(2)
+
+
+# ── App Lifecycle ──
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    task = asyncio.create_task(ai_worker())
+    yield
+    task.cancel()
+
+
+app = FastAPI(title="Ledger", lifespan=lifespan)
+
+# Include routers
+from routers.captures import router as captures_router
+from routers.people import router as people_router
+from routers.projects import router as projects_router
+from routers.meetings import router as meetings_router
+from routers.digest import router as digest_router
+
+app.include_router(captures_router)
+app.include_router(people_router)
+app.include_router(projects_router)
+app.include_router(meetings_router)
+app.include_router(digest_router)
+
+
+@app.websocket("/ws")
+async def websocket_endpoint(ws: WebSocket):
+    await manager.connect(ws)
+    try:
+        while True:
+            await ws.receive_text()
+    except WebSocketDisconnect:
+        manager.disconnect(ws)
+
+
+# ── Health check ──
+
+@app.get("/api/health")
+def health():
+    return {"status": "ok"}
+
+
+# ── Serve React SPA ──
+
+static_dir = os.path.join(os.path.dirname(__file__), "static")
+if os.path.isdir(static_dir):
+    assets_dir = os.path.join(static_dir, "assets")
+    if os.path.isdir(assets_dir):
+        app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+
+    @app.get("/{full_path:path}")
+    async def serve_spa(full_path: str):
+        file_path = os.path.join(static_dir, full_path)
+        if full_path and os.path.isfile(file_path):
+            return FileResponse(file_path)
+        return FileResponse(os.path.join(static_dir, "index.html"))

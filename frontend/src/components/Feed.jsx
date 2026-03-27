@@ -1,0 +1,72 @@
+import { useState, useEffect } from 'react';
+import { api } from '../api/client';
+import ItemCard from './ItemCard';
+import { CalendarDays } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+
+const TYPE_OPTIONS = ['all', 'todo', 'followup', 'reminder', 'discussion', 'goal', 'note'];
+const URGENCY_OPTIONS = ['all', 'today', 'this_week', 'this_month', 'someday'];
+
+export default function Feed({ refreshKey, onRefresh, showDigestBanner, onDismissDigest }) {
+  const [items, setItems] = useState([]);
+  const [typeFilter, setTypeFilter] = useState('all');
+  const [urgencyFilter, setUrgencyFilter] = useState('all');
+  const [search, setSearch] = useState('');
+  const [showArchive, setShowArchive] = useState(false);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const params = {};
+    if (typeFilter !== 'all') params.type = typeFilter;
+    if (urgencyFilter !== 'all') params.urgency = urgencyFilter;
+    if (search) params.search = search;
+    if (showArchive) params.include_done = 'true';
+    else params.status = 'open';
+    api.listCaptures(params).then(setItems).catch(console.error);
+  }, [refreshKey, typeFilter, urgencyFilter, search, showArchive]);
+
+  return (
+    <div className="max-w-4xl mx-auto px-4 py-4">
+      {showDigestBanner && (
+        <div className="mb-4 p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg flex items-center justify-between">
+          <div className="flex items-center gap-2 text-amber-400 text-sm">
+            <CalendarDays size={16} />
+            <span>Your daily digest is ready</span>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={() => navigate('/digest')} className="text-xs text-amber-400 hover:text-amber-300 font-medium">View</button>
+            <button onClick={onDismissDigest} className="text-xs text-zinc-500 hover:text-zinc-400">Dismiss</button>
+          </div>
+        </div>
+      )}
+
+      <div className="flex flex-wrap items-center gap-2 mb-4">
+        <select value={urgencyFilter} onChange={e => setUrgencyFilter(e.target.value)}
+          className="bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-xs text-zinc-300">
+          {URGENCY_OPTIONS.map(o => <option key={o} value={o}>{o === 'all' ? 'All Urgency' : o.replace('_', ' ')}</option>)}
+        </select>
+        <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)}
+          className="bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-xs text-zinc-300">
+          {TYPE_OPTIONS.map(o => <option key={o} value={o}>{o === 'all' ? 'All Types' : o}</option>)}
+        </select>
+        <input type="text" placeholder="Search..." value={search} onChange={e => setSearch(e.target.value)}
+          className="bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-xs text-zinc-300 w-40 outline-none focus:border-zinc-500" />
+        <label className="flex items-center gap-1 text-xs text-zinc-500 ml-auto cursor-pointer">
+          <input type="checkbox" checked={showArchive} onChange={e => setShowArchive(e.target.checked)} className="rounded" />
+          Show archive
+        </label>
+      </div>
+
+      <div className="flex flex-col gap-2">
+        {items.length === 0 && (
+          <div className="text-center text-zinc-600 py-12 text-sm">
+            {search ? 'No matches found' : 'No items yet. Capture something above!'}
+          </div>
+        )}
+        {items.map(item => (
+          <ItemCard key={item.id} item={item} onUpdate={onRefresh} />
+        ))}
+      </div>
+    </div>
+  );
+}
