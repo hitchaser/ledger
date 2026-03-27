@@ -30,7 +30,7 @@ export default function CaptureBox({ onCapture }) {
   };
 
   return (
-    <div className="border-b border-zinc-800 bg-zinc-900/50 px-4 py-3">
+    <div className="border-b border-white/[0.06] bg-black/30 backdrop-blur-xl px-4 py-3">
       <div className="flex items-center gap-2 max-w-4xl mx-auto">
         <input
           id="capture-input"
@@ -41,12 +41,12 @@ export default function CaptureBox({ onCapture }) {
           onKeyDown={handleKey}
           placeholder="What's on your mind..."
           autoFocus
-          className="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg px-4 py-2.5 text-sm text-zinc-100 placeholder-zinc-500 outline-none focus:border-emerald-500 transition-colors"
+          className="flex-1 glass-input rounded-lg px-4 py-2.5 text-sm text-zinc-100 placeholder-zinc-600 outline-none transition-all"
         />
         <button
           onClick={submit}
           disabled={loading || !text.trim()}
-          className="p-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          className="p-2.5 rounded-lg bg-blue-600/80 hover:bg-blue-500 disabled:opacity-30 disabled:cursor-not-allowed transition-all backdrop-blur-sm border border-blue-500/20"
         >
           <Send size={16} className="text-white" />
         </button>
