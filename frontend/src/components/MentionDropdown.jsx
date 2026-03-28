@@ -1,10 +1,14 @@
 import { User, FolderKanban } from 'lucide-react';
 
-export default function MentionDropdown({ results, selectedIndex, onSelect }) {
+export default function MentionDropdown({ results, selectedIndex, onSelect, position = 'below' }) {
   if (!results || results.length === 0) return null;
 
+  const posClass = position === 'above'
+    ? 'bottom-full mb-1'
+    : 'top-full mt-1';
+
   return (
-    <div className="absolute bottom-full left-0 right-0 mb-1 glass rounded-lg border border-white/10 shadow-xl shadow-black/40 overflow-hidden z-50">
+    <div className={`absolute ${posClass} left-0 right-0 glass rounded-lg border border-white/10 shadow-xl shadow-black/40 overflow-hidden z-50`}>
       {results.map((item, i) => (
         <button
           key={`${item.type}-${item.id}`}

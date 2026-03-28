@@ -227,7 +227,7 @@ export default function MeetingMode({ refreshKey, onRefresh }) {
                 onKeyDown={e => { if (mentions.handleMentionKey(e, captureText, setCaptureText)) return; if (e.key === 'Enter') capture(); }}
                 className="w-full glass-input rounded-lg px-3 py-2 text-sm text-zinc-200 outline-none" />
               {mentions.isActive && (
-                <MentionDropdown results={mentions.mentionResults} selectedIndex={mentions.selectedIndex}
+                <MentionDropdown results={mentions.mentionResults} selectedIndex={mentions.selectedIndex} position="above"
                   onSelect={item => { setCaptureText(mentions.selectMention(captureText, item)); captureInputRef.current?.focus(); }} />
               )}
             </div>
