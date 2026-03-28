@@ -53,6 +53,13 @@ export const api = {
   startMeeting: (data) => request('/meetings', { method: 'POST', body: JSON.stringify(data) }),
   endMeeting: (id) => request(`/meetings/${id}/end`, { method: 'PATCH' }),
   getActiveMeeting: () => request('/meetings/active'),
+  forceEndActiveMeeting: async () => {
+    const active = await request('/meetings/active');
+    if (active && active.id) {
+      return request(`/meetings/${active.id}/end`, { method: 'PATCH' });
+    }
+    return null;
+  },
 
   // Digest
   getDigest: () => request('/digest'),

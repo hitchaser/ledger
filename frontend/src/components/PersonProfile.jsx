@@ -56,7 +56,15 @@ export default function PersonProfile({ refreshKey, onRefresh }) {
       await api.startMeeting({ person_id: id });
       navigate(`/meeting/person/${id}`);
     } catch (e) {
-      alert(e.message);
+      if (e.message.includes('409')) {
+        if (confirm('There is an active meeting session. End it and start a new one?')) {
+          await api.forceEndActiveMeeting();
+          await api.startMeeting({ person_id: id });
+          navigate(`/meeting/person/${id}`);
+        }
+      } else {
+        alert(e.message);
+      }
     }
   };
 

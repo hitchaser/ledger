@@ -56,7 +56,15 @@ export default function ProjectCard({ refreshKey, onRefresh }) {
       await api.startMeeting({ project_id: id });
       navigate(`/meeting/project/${id}`);
     } catch (e) {
-      alert(e.message);
+      if (e.message.includes('409')) {
+        if (confirm('There is an active meeting session. End it and start a new one?')) {
+          await api.forceEndActiveMeeting();
+          await api.startMeeting({ project_id: id });
+          navigate(`/meeting/project/${id}`);
+        }
+      } else {
+        alert(e.message);
+      }
     }
   };
 
