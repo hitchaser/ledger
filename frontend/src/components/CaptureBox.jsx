@@ -47,7 +47,7 @@ export default function CaptureBox({ onCapture }) {
   };
 
   return (
-    <div className="border-b border-white/[0.06] bg-black/30 backdrop-blur-xl px-4 py-3">
+    <div className="border-b border-white/[0.06] bg-black/30 backdrop-blur-xl px-4 py-3 relative z-40 overflow-visible">
       <div className="flex items-center gap-2 max-w-4xl mx-auto relative">
         <div className="flex-1 relative">
           <input
