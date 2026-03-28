@@ -52,6 +52,13 @@ async def ai_worker():
     while True:
         try:
             db = SessionLocal()
+            # Reset any stuck "processing" jobs older than 60s back to pending
+            from sqlalchemy import text as sa_text
+            db.execute(sa_text(
+                "UPDATE ai_jobs SET status = 'pending' WHERE status = 'processing' "
+                "AND created_at < NOW() - INTERVAL '60 seconds'"
+            ))
+            db.commit()
             job = db.query(AIJob).filter(AIJob.status == "pending").order_by(AIJob.created_at).first()
             if job:
                 job.status = "processing"
@@ -85,20 +92,25 @@ async def ai_worker():
                     item.ai_confidence = result.get("confidence", 0.0)
                     item.ai_processed_at = datetime.now(timezone.utc)
 
+                    # Track linked IDs to avoid duplicate inserts
+                    linked_people_ids = set(
+                        r.person_id for r in db.query(CaptureItemPerson).filter_by(capture_item_id=item.id).all()
+                    )
+                    linked_project_ids = set(
+                        r.project_id for r in db.query(CaptureItemProject).filter_by(capture_item_id=item.id).all()
+                    )
+
                     for name in result.get("linked_people", []):
                         person = db.query(Person).filter(
                             Person.display_name.ilike(name),
                             Person.is_archived == False,
                         ).first()
-                        if person:
-                            existing = db.query(CaptureItemPerson).filter_by(
-                                capture_item_id=item.id, person_id=person.id
-                            ).first()
-                            if not existing:
-                                db.add(CaptureItemPerson(
-                                    capture_item_id=item.id, person_id=person.id,
-                                    link_source=LinkSource.ai
-                                ))
+                        if person and person.id not in linked_people_ids:
+                            db.add(CaptureItemPerson(
+                                capture_item_id=item.id, person_id=person.id,
+                                link_source=LinkSource.ai
+                            ))
+                            linked_people_ids.add(person.id)
 
                     for name in result.get("linked_projects", []):
                         project = db.query(Project).filter(
@@ -110,41 +122,32 @@ async def ai_worker():
                                 Project.short_code.ilike(name),
                                 Project.is_archived == False,
                             ).first()
-                        if project:
-                            existing = db.query(CaptureItemProject).filter_by(
-                                capture_item_id=item.id, project_id=project.id
-                            ).first()
-                            if not existing:
-                                db.add(CaptureItemProject(
-                                    capture_item_id=item.id, project_id=project.id,
-                                    link_source=LinkSource.ai
-                                ))
+                        if project and project.id not in linked_project_ids:
+                            db.add(CaptureItemProject(
+                                capture_item_id=item.id, project_id=project.id,
+                                link_source=LinkSource.ai
+                            ))
+                            linked_project_ids.add(project.id)
 
                     # Text-scan fallback: catch any people/projects explicitly
                     # mentioned in the raw text that the AI missed
                     raw_lower = item.raw_text.lower()
                     for person in people:
-                        if person.display_name.lower() in raw_lower:
-                            existing = db.query(CaptureItemPerson).filter_by(
-                                capture_item_id=item.id, person_id=person.id
-                            ).first()
-                            if not existing:
-                                db.add(CaptureItemPerson(
-                                    capture_item_id=item.id, person_id=person.id,
-                                    link_source=LinkSource.ai
-                                ))
+                        if person.display_name.lower() in raw_lower and person.id not in linked_people_ids:
+                            db.add(CaptureItemPerson(
+                                capture_item_id=item.id, person_id=person.id,
+                                link_source=LinkSource.ai
+                            ))
+                            linked_people_ids.add(person.id)
                     for proj in projects:
                         name_match = proj.name.lower() in raw_lower
                         code_match = proj.short_code and proj.short_code.lower() in raw_lower
-                        if name_match or code_match:
-                            existing = db.query(CaptureItemProject).filter_by(
-                                capture_item_id=item.id, project_id=proj.id
-                            ).first()
-                            if not existing:
-                                db.add(CaptureItemProject(
-                                    capture_item_id=item.id, project_id=proj.id,
-                                    link_source=LinkSource.ai
-                                ))
+                        if (name_match or code_match) and proj.id not in linked_project_ids:
+                            db.add(CaptureItemProject(
+                                capture_item_id=item.id, project_id=proj.id,
+                                link_source=LinkSource.ai
+                            ))
+                            linked_project_ids.add(proj.id)
 
                     if result.get("item_type") == "profile_update":
                         item.status = "done"
@@ -173,29 +176,29 @@ async def ai_worker():
 
                 else:
                     # AI failed but still do text-scan linking
+                    linked_people_ids = set(
+                        r.person_id for r in db.query(CaptureItemPerson).filter_by(capture_item_id=item.id).all()
+                    )
+                    linked_project_ids = set(
+                        r.project_id for r in db.query(CaptureItemProject).filter_by(capture_item_id=item.id).all()
+                    )
                     raw_lower = item.raw_text.lower()
                     for person in people:
-                        if person.display_name.lower() in raw_lower:
-                            existing = db.query(CaptureItemPerson).filter_by(
-                                capture_item_id=item.id, person_id=person.id
-                            ).first()
-                            if not existing:
-                                db.add(CaptureItemPerson(
-                                    capture_item_id=item.id, person_id=person.id,
-                                    link_source=LinkSource.ai
-                                ))
+                        if person.display_name.lower() in raw_lower and person.id not in linked_people_ids:
+                            db.add(CaptureItemPerson(
+                                capture_item_id=item.id, person_id=person.id,
+                                link_source=LinkSource.ai
+                            ))
+                            linked_people_ids.add(person.id)
                     for proj in projects:
                         name_match = proj.name.lower() in raw_lower
                         code_match = proj.short_code and proj.short_code.lower() in raw_lower
-                        if name_match or code_match:
-                            existing = db.query(CaptureItemProject).filter_by(
-                                capture_item_id=item.id, project_id=proj.id
-                            ).first()
-                            if not existing:
-                                db.add(CaptureItemProject(
-                                    capture_item_id=item.id, project_id=proj.id,
-                                    link_source=LinkSource.ai
-                                ))
+                        if (name_match or code_match) and proj.id not in linked_project_ids:
+                            db.add(CaptureItemProject(
+                                capture_item_id=item.id, project_id=proj.id,
+                                link_source=LinkSource.ai
+                            ))
+                            linked_project_ids.add(proj.id)
                     item.ai_processed_at = datetime.now(timezone.utc)
                     job.status = "failed"
                     job.error = "No result from AI"
