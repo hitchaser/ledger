@@ -37,11 +37,13 @@ export default function MeetingMode({ onRefresh }) {
   const capture = async () => {
     const t = captureText.trim();
     if (!t) return;
-    const tag = isPerson ? `#${entity.display_name.toLowerCase().replace(/\s+/g, '')}` : `#${(entity.short_code || entity.name).toLowerCase()}`;
-    await api.createCapture(`${t} ${tag}`);
+    const result = await api.createCapture(t);
+    // Directly link to the meeting's person/project — no hashtag guessing
+    if (isPerson) await api.linkPerson(result.id, id);
+    else await api.linkProject(result.id, id);
     setCaptureText('');
     onRefresh?.();
-    setTimeout(loadData, 500);
+    loadData();
   };
 
   const endMeeting = async () => {
