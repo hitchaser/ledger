@@ -20,6 +20,25 @@ logger = logging.getLogger("ledger")
 # Create tables
 Base.metadata.create_all(bind=engine)
 
+# Migration: add profile column if missing
+from sqlalchemy import inspect as sa_inspect, text as sa_text
+_insp = sa_inspect(engine)
+_people_cols = [c["name"] for c in _insp.get_columns("people")]
+if "profile" not in _people_cols:
+    with engine.begin() as conn:
+        conn.execute(sa_text("ALTER TABLE people ADD COLUMN profile JSON"))
+    # Migrate context_notes to profile.general for existing people
+    _db = SessionLocal()
+    for _p in _db.query(Person).all():
+        _p.profile = {
+            "spouse": "", "anniversary": "", "children": [],
+            "pets": [], "birthday": "", "hobbies": "", "location": "",
+            "general": _p.context_notes or ""
+        }
+    _db.commit()
+    _db.close()
+    logger.info("Migrated people table: added profile column")
+
 
 # ── WebSocket Manager ──
 
@@ -152,30 +171,54 @@ async def ai_worker():
                     if result.get("item_type") == "profile_update":
                         item.status = "done"
                         item.resolved_at = datetime.now(timezone.utc)
-                        # Append to linked person/project context_notes
-                        date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-                        note_entry = f"[{date_str}] {item.raw_text}"
                         from models import ProfileLog, LogType
+                        from services.ai_service import parse_profile_update
+
                         for person in (db.query(Person).filter(
                             Person.id.in_(linked_people_ids)
                         ).all() if linked_people_ids else []):
-                            person.context_notes = (
-                                (person.context_notes + "\n" if person.context_notes else "") + note_entry
-                            )
+                            profile = person.profile or {
+                                "spouse": "", "anniversary": "", "children": [],
+                                "pets": [], "birthday": "", "hobbies": "",
+                                "location": "", "general": ""
+                            }
+                            update = parse_profile_update(item.raw_text, profile)
+                            field = update.get("field", "general")
+                            value = update.get("value", item.raw_text)
+
+                            if field in ("children", "pets"):
+                                current_list = profile.get(field, [])
+                                # Dedup: case-insensitive check
+                                if not any(v.lower() == value.lower() for v in current_list):
+                                    current_list.append(value)
+                                    profile[field] = current_list
+                            elif field == "general":
+                                existing = profile.get("general", "")
+                                profile["general"] = (existing + "\n" + value).strip() if existing else value
+                            else:
+                                profile[field] = value
+
+                            person.profile = profile
+                            # Force SQLAlchemy to detect JSON change
+                            from sqlalchemy.orm.attributes import flag_modified
+                            flag_modified(person, "profile")
+
                             db.add(ProfileLog(
                                 log_type=LogType.profile_update,
-                                content=note_entry,
+                                content=f"{field}: {value}",
                                 person_id=person.id,
                             ))
+
                         for proj in (db.query(Project).filter(
                             Project.id.in_(linked_project_ids)
                         ).all() if linked_project_ids else []):
                             proj.context_notes = (
-                                (proj.context_notes + "\n" if proj.context_notes else "") + note_entry
+                                (proj.context_notes + "\n" if proj.context_notes else "")
+                                + item.raw_text
                             )
                             db.add(ProfileLog(
                                 log_type=LogType.profile_update,
-                                content=note_entry,
+                                content=item.raw_text,
                                 project_id=proj.id,
                             ))
 

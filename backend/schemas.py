@@ -54,6 +54,16 @@ class CaptureResponse(BaseModel):
 
 # ── Person ──
 
+class ProfileData(BaseModel):
+    spouse: str = ""
+    anniversary: str = ""
+    children: List[str] = []
+    pets: List[str] = []
+    birthday: str = ""
+    hobbies: str = ""
+    location: str = ""
+    general: str = ""
+
 class PersonCreate(BaseModel):
     name: str
     display_name: str
@@ -61,6 +71,7 @@ class PersonCreate(BaseModel):
     reporting_level: str = "other"
     email: Optional[str] = None
     context_notes: Optional[str] = ""
+    profile: Optional[ProfileData] = None
 
 class PersonUpdate(BaseModel):
     name: Optional[str] = None
@@ -70,6 +81,7 @@ class PersonUpdate(BaseModel):
     email: Optional[str] = None
     context_notes: Optional[str] = None
     is_archived: Optional[bool] = None
+    profile: Optional[ProfileData] = None
 
 class PersonResponse(BaseModel):
     id: UUID
@@ -82,6 +94,7 @@ class PersonResponse(BaseModel):
     updated_at: datetime
     is_archived: bool
     context_notes: str
+    profile: Optional[ProfileData] = None
     open_item_count: int = 0
 
     class Config:

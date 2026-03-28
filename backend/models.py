@@ -3,7 +3,7 @@ import enum
 from datetime import datetime, timezone
 from sqlalchemy import (
     Column, String, Text, Float, Integer, Boolean, DateTime,
-    ForeignKey, Enum, Table
+    ForeignKey, Enum, Table, JSON
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
@@ -132,6 +132,10 @@ class Person(Base):
     updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
     is_archived = Column(Boolean, default=False)
     context_notes = Column(Text, default="")
+    profile = Column(JSON, default=lambda: {
+        "spouse": "", "anniversary": "", "children": [],
+        "pets": [], "birthday": "", "hobbies": "", "location": "", "general": ""
+    })
 
     capture_items = relationship("CaptureItem", secondary="capture_item_people", back_populates="linked_people")
     profile_logs = relationship("ProfileLog", back_populates="person", foreign_keys="ProfileLog.person_id")

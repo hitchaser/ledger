@@ -67,6 +67,78 @@ Captured text: "{raw_text}"
         return None
 
 
+def parse_profile_update(raw_text: str, current_profile: dict) -> dict:
+    """Parse a profile update into a structured field and extracted value.
+    Uses AI when available, falls back to keyword matching."""
+
+    # Try AI extraction first
+    try:
+        children_str = ', '.join(current_profile.get('children', [])) or 'None'
+        pets_str = ', '.join(current_profile.get('pets', [])) or 'None'
+
+        prompt = f"""Extract structured profile information from this text about a person.
+
+Profile fields: spouse, anniversary, children, pets, birthday, hobbies, location, general
+
+Current children: {children_str}
+Current pets: {pets_str}
+
+Text: "{raw_text}"
+
+Return ONLY a JSON object:
+{{"field": "one of: spouse, anniversary, children, pets, birthday, hobbies, location, general", "value": "the extracted value only"}}
+
+Examples:
+"has a daughter named Susan" → {{"field": "children", "value": "Susan"}}
+"wife is Sarah" → {{"field": "spouse", "value": "Sarah"}}
+"lives in Austin Texas" → {{"field": "location", "value": "Austin, TX"}}
+"birthday is March 3" → {{"field": "birthday", "value": "March 3"}}
+"has a golden retriever named Max" → {{"field": "pets", "value": "Max (golden retriever)"}}
+"enjoys golf and fishing" → {{"field": "hobbies", "value": "Golf, fishing"}}
+"anniversary is June 15" → {{"field": "anniversary", "value": "June 15"}}
+
+For children/pets, return ONLY the name (and type for pets). Do not repeat existing entries.
+For general catch-all info that doesn't fit a field, use "general"."""
+
+        resp = httpx.post(
+            f"{OLLAMA_BASE_URL}/api/chat",
+            json={
+                "model": OLLAMA_MODEL,
+                "messages": [{"role": "user", "content": prompt}],
+                "stream": False,
+                "format": "json",
+            },
+            timeout=30.0,
+        )
+        resp.raise_for_status()
+        content = resp.json().get("message", {}).get("content", "")
+        result = json.loads(content)
+        if result.get("field") and result.get("value"):
+            return result
+    except Exception as e:
+        logger.warning(f"AI profile parse failed, using keyword fallback: {e}")
+
+    # Keyword fallback
+    text_lower = raw_text.lower()
+
+    if any(w in text_lower for w in ['daughter', 'son', 'child', 'kid', 'baby']):
+        return {"field": "children", "value": raw_text}
+    if any(w in text_lower for w in ['wife', 'husband', 'spouse', 'partner', 'married to']):
+        return {"field": "spouse", "value": raw_text}
+    if any(w in text_lower for w in ['dog', 'cat', 'pet', 'puppy', 'kitten', 'fish', 'bird']):
+        return {"field": "pets", "value": raw_text}
+    if any(w in text_lower for w in ['birthday', 'born on', 'born in']):
+        return {"field": "birthday", "value": raw_text}
+    if 'anniversary' in text_lower:
+        return {"field": "anniversary", "value": raw_text}
+    if any(w in text_lower for w in ['hobby', 'hobbies', 'enjoys', 'likes to', 'plays', 'fan of']):
+        return {"field": "hobbies", "value": raw_text}
+    if any(w in text_lower for w in ['lives in', 'moved to', 'based in', 'located in']):
+        return {"field": "location", "value": raw_text}
+
+    return {"field": "general", "value": raw_text}
+
+
 def generate_meeting_summary(context_name: str, context_notes: str,
                               items: list) -> Optional[str]:
     """Generate a structured meeting summary from item data. No AI — just facts."""

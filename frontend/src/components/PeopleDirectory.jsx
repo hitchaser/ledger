@@ -16,7 +16,10 @@ export default function PeopleDirectory({ refreshKey }) {
   const [search, setSearch] = useState('');
   const [showArchived, setShowArchived] = useState(false);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ name: '', display_name: '', role: '', reporting_level: 'employee', context_notes: '' });
+  const [form, setForm] = useState({
+    name: '', display_name: '', role: '', reporting_level: 'employee',
+    profile: { spouse: '', anniversary: '', children: '', pets: '', birthday: '', hobbies: '', location: '', general: '' }
+  });
 
   useEffect(() => { api.listPeople(showArchived).then(setPeople).catch(console.error); }, [refreshKey, showArchived]);
 
@@ -28,8 +31,14 @@ export default function PeopleDirectory({ refreshKey }) {
   const handleCreate = async (e) => {
     e.preventDefault();
     if (!form.name.trim()) return;
-    await api.createPerson({ ...form, display_name: form.display_name || form.name });
-    setForm({ name: '', display_name: '', role: '', reporting_level: 'employee', context_notes: '' });
+    const profileData = {
+      ...form.profile,
+      children: form.profile.children ? form.profile.children.split(',').map(s => s.trim()).filter(Boolean) : [],
+      pets: form.profile.pets ? form.profile.pets.split(',').map(s => s.trim()).filter(Boolean) : [],
+    };
+    await api.createPerson({ ...form, display_name: form.display_name || form.name, profile: profileData });
+    setForm({ name: '', display_name: '', role: '', reporting_level: 'employee',
+      profile: { spouse: '', anniversary: '', children: '', pets: '', birthday: '', hobbies: '', location: '', general: '' } });
     setShowForm(false);
     api.listPeople().then(setPeople);
   };
@@ -60,7 +69,24 @@ export default function PeopleDirectory({ refreshKey }) {
             <option value="peer">Peer</option>
             <option value="other">Other</option>
           </select>
-          <textarea placeholder="Context notes..." value={form.context_notes} onChange={e => setForm({...form, context_notes: e.target.value})}
+          <div className="col-span-2 border-t border-white/[0.04] pt-2 mt-1">
+            <span className="text-xs text-zinc-500 font-medium uppercase tracking-wide">Profile (optional)</span>
+          </div>
+          <input placeholder="Spouse / Partner" value={form.profile.spouse} onChange={e => setForm({...form, profile: {...form.profile, spouse: e.target.value}})}
+            className="glass-input rounded px-3 py-1.5 text-sm text-zinc-200 outline-none" />
+          <input placeholder="Birthday" value={form.profile.birthday} onChange={e => setForm({...form, profile: {...form.profile, birthday: e.target.value}})}
+            className="glass-input rounded px-3 py-1.5 text-sm text-zinc-200 outline-none" />
+          <input placeholder="Anniversary" value={form.profile.anniversary} onChange={e => setForm({...form, profile: {...form.profile, anniversary: e.target.value}})}
+            className="glass-input rounded px-3 py-1.5 text-sm text-zinc-200 outline-none" />
+          <input placeholder="Location" value={form.profile.location} onChange={e => setForm({...form, profile: {...form.profile, location: e.target.value}})}
+            className="glass-input rounded px-3 py-1.5 text-sm text-zinc-200 outline-none" />
+          <input placeholder="Children (comma separated)" value={form.profile.children} onChange={e => setForm({...form, profile: {...form.profile, children: e.target.value}})}
+            className="glass-input rounded px-3 py-1.5 text-sm text-zinc-200 outline-none" />
+          <input placeholder="Pets (comma separated)" value={form.profile.pets} onChange={e => setForm({...form, profile: {...form.profile, pets: e.target.value}})}
+            className="glass-input rounded px-3 py-1.5 text-sm text-zinc-200 outline-none" />
+          <input placeholder="Hobbies" value={form.profile.hobbies} onChange={e => setForm({...form, profile: {...form.profile, hobbies: e.target.value}})}
+            className="col-span-2 glass-input rounded px-3 py-1.5 text-sm text-zinc-200 outline-none" />
+          <textarea placeholder="General notes..." value={form.profile.general} onChange={e => setForm({...form, profile: {...form.profile, general: e.target.value}})}
             className="col-span-2 glass-input rounded px-3 py-1.5 text-sm text-zinc-200 outline-none resize-none h-16" />
           <div className="col-span-2 flex justify-end gap-2">
             <button type="button" onClick={() => setShowForm(false)} className="text-xs text-zinc-600 px-3 py-1">Cancel</button>

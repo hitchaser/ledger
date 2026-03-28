@@ -4,6 +4,26 @@ import { api } from '../api/client';
 import ItemCard from './ItemCard';
 import { ArrowLeft, Play, Edit3, Save, Plus, Settings, X, Archive, ArchiveRestore, Trash2 } from 'lucide-react';
 
+const DEFAULT_PROFILE = {
+  spouse: '', anniversary: '', children: [], pets: [],
+  birthday: '', hobbies: '', location: '', general: ''
+};
+
+const PROFILE_FIELDS = [
+  { key: 'spouse', label: 'Spouse / Partner' },
+  { key: 'anniversary', label: 'Anniversary' },
+  { key: 'birthday', label: 'Birthday' },
+  { key: 'children', label: 'Children', isList: true },
+  { key: 'pets', label: 'Pets', isList: true },
+  { key: 'hobbies', label: 'Hobbies' },
+  { key: 'location', label: 'Location' },
+];
+
+function displayValue(val, isList) {
+  if (isList) return val && val.length > 0 ? val.join(', ') : 'Unknown';
+  return val || 'Unknown';
+}
+
 export default function PersonProfile({ refreshKey, onRefresh }) {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -12,23 +32,24 @@ export default function PersonProfile({ refreshKey, onRefresh }) {
   const [completedItems, setCompletedItems] = useState([]);
   const [logs, setLogs] = useState([]);
   const [tab, setTab] = useState('items');
-  const [editingNotes, setEditingNotes] = useState(false);
-  const [notes, setNotes] = useState('');
-  const [addNote, setAddNote] = useState('');
   const [editingDetails, setEditingDetails] = useState(false);
   const [detailsForm, setDetailsForm] = useState({ name: '', display_name: '', role: '', reporting_level: '', email: '' });
+  const [editingProfile, setEditingProfile] = useState(false);
+  const [profileForm, setProfileForm] = useState({ ...DEFAULT_PROFILE });
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   useEffect(() => {
     api.getPerson(id).then(p => {
       setPerson(p);
-      setNotes(p.context_notes || '');
       setDetailsForm({ name: p.name, display_name: p.display_name, role: p.role || '', reporting_level: p.reporting_level, email: p.email || '' });
+      setProfileForm({ ...DEFAULT_PROFILE, ...(p.profile || {}) });
     });
     api.getPersonItems(id, 'open').then(setItems);
     api.getPersonItems(id, 'done').then(setCompletedItems);
     api.getPersonLogs(id).then(setLogs);
   }, [id, refreshKey]);
+
+  const profile = person?.profile ? { ...DEFAULT_PROFILE, ...person.profile } : DEFAULT_PROFILE;
 
   const saveDetails = async () => {
     await api.updatePerson(id, detailsForm);
@@ -37,18 +58,20 @@ export default function PersonProfile({ refreshKey, onRefresh }) {
     setEditingDetails(false);
   };
 
-  const saveNotes = async () => {
-    await api.updatePerson(id, { context_notes: notes });
-    setEditingNotes(false);
-  };
-
-  const addContextNote = async () => {
-    if (!addNote.trim()) return;
-    const date = new Date().toISOString().split('T')[0];
-    const updated = (notes ? notes + '\n' : '') + `[${date}] ${addNote.trim()}`;
-    await api.updatePerson(id, { context_notes: updated });
-    setNotes(updated);
-    setAddNote('');
+  const saveProfile = async () => {
+    // Convert comma-separated strings back to arrays for list fields
+    const profileData = { ...profileForm };
+    if (typeof profileData.children === 'string') {
+      profileData.children = profileData.children.split(',').map(s => s.trim()).filter(Boolean);
+    }
+    if (typeof profileData.pets === 'string') {
+      profileData.pets = profileData.pets.split(',').map(s => s.trim()).filter(Boolean);
+    }
+    await api.updatePerson(id, { profile: profileData });
+    const updated = await api.getPerson(id);
+    setPerson(updated);
+    setProfileForm({ ...DEFAULT_PROFILE, ...(updated.profile || {}) });
+    setEditingProfile(false);
   };
 
   const startMeeting = async () => {
@@ -161,26 +184,76 @@ export default function PersonProfile({ refreshKey, onRefresh }) {
         </div>
       )}
 
+      {/* Structured Profile Card */}
       <div className="mb-4 p-3 glass rounded-lg">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-xs text-zinc-500 font-medium uppercase tracking-wide">Context Notes</span>
-          <button onClick={() => editingNotes ? saveNotes() : setEditingNotes(true)}
+        <div className="flex items-center justify-between mb-3">
+          <span className="text-xs text-zinc-500 font-medium uppercase tracking-wide">Profile</span>
+          <button onClick={() => {
+            if (editingProfile) { saveProfile(); } else {
+              setProfileForm({
+                ...DEFAULT_PROFILE, ...profile,
+                children: Array.isArray(profile.children) ? profile.children.join(', ') : profile.children || '',
+                pets: Array.isArray(profile.pets) ? profile.pets.join(', ') : profile.pets || '',
+              });
+              setEditingProfile(true);
+            }
+          }}
             className="text-xs text-zinc-600 hover:text-zinc-300 flex items-center gap-1 transition-colors">
-            {editingNotes ? <><Save size={12} /> Save</> : <><Edit3 size={12} /> Edit</>}
+            {editingProfile ? <><Save size={12} /> Save</> : <><Edit3 size={12} /> Edit</>}
           </button>
         </div>
-        {editingNotes ? (
-          <textarea value={notes} onChange={e => setNotes(e.target.value)}
-            className="w-full glass-input rounded p-2 text-sm text-zinc-300 outline-none resize-none min-h-[80px]" />
+
+        {editingProfile ? (
+          <div className="grid grid-cols-2 gap-2">
+            {PROFILE_FIELDS.map(({ key, label, isList }) => (
+              <div key={key}>
+                <label className="text-xs text-zinc-600 mb-0.5 block">{label}{isList ? ' (comma separated)' : ''}</label>
+                <input
+                  value={profileForm[key] || ''}
+                  onChange={e => setProfileForm({ ...profileForm, [key]: e.target.value })}
+                  placeholder="Unknown"
+                  className="w-full glass-input rounded px-3 py-1.5 text-sm text-zinc-200 outline-none"
+                />
+              </div>
+            ))}
+            <div className="col-span-2">
+              <label className="text-xs text-zinc-600 mb-0.5 block">General Notes</label>
+              <textarea
+                value={profileForm.general || ''}
+                onChange={e => setProfileForm({ ...profileForm, general: e.target.value })}
+                placeholder="Any additional notes..."
+                className="w-full glass-input rounded px-3 py-1.5 text-sm text-zinc-200 outline-none resize-none min-h-[60px]"
+              />
+            </div>
+            <div className="col-span-2 flex justify-end gap-2 mt-1">
+              <button onClick={() => setEditingProfile(false)} className="text-xs text-zinc-600 px-3 py-1">Cancel</button>
+              <button onClick={saveProfile} className="text-xs bg-blue-600/80 hover:bg-blue-500 text-white rounded px-3 py-1.5 border border-blue-500/20 transition-all">Save Profile</button>
+            </div>
+          </div>
         ) : (
-          <pre className="text-sm text-zinc-400 whitespace-pre-wrap font-sans">{notes || 'No context notes yet.'}</pre>
+          <div className="space-y-1.5">
+            {PROFILE_FIELDS.map(({ key, label, isList }) => {
+              const val = profile[key];
+              const display = displayValue(val, isList);
+              const isUnknown = display === 'Unknown';
+              return (
+                <div key={key} className="flex items-baseline gap-3">
+                  <span className="text-xs text-zinc-600 w-28 flex-shrink-0 text-right">{label}</span>
+                  <span className={`text-sm ${isUnknown ? 'text-zinc-700 italic' : 'text-zinc-300'}`}>{display}</span>
+                </div>
+              );
+            })}
+            {profile.general && (
+              <>
+                <div className="border-t border-white/[0.04] my-2" />
+                <div>
+                  <span className="text-xs text-zinc-600">General Notes</span>
+                  <pre className="text-sm text-zinc-400 whitespace-pre-wrap font-sans mt-1">{profile.general}</pre>
+                </div>
+              </>
+            )}
+          </div>
         )}
-        <div className="flex gap-2 mt-2">
-          <input placeholder="Add context note..." value={addNote} onChange={e => setAddNote(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && addContextNote()}
-            className="flex-1 glass-input rounded px-2 py-1 text-xs text-zinc-300 outline-none" />
-          <button onClick={addContextNote} className="text-xs text-blue-400 hover:text-blue-300 transition-colors"><Plus size={14} /></button>
-        </div>
       </div>
 
       <div className="flex gap-4 border-b border-white/[0.06] mb-3">

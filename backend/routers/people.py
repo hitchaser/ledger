@@ -9,16 +9,23 @@ from schemas import PersonCreate, PersonUpdate, PersonResponse, ProfileLogRespon
 router = APIRouter(prefix="/api/people", tags=["people"])
 
 
+DEFAULT_PROFILE = {
+    "spouse": "", "anniversary": "", "children": [],
+    "pets": [], "birthday": "", "hobbies": "", "location": "", "general": ""
+}
+
 def person_response(p: Person, db: Session) -> dict:
     count = db.query(CaptureItemPerson).join(CaptureItem).filter(
         CaptureItemPerson.person_id == p.id,
         CaptureItem.status == ItemStatus.open
     ).count()
+    profile = {**DEFAULT_PROFILE, **(p.profile or {})}
     return {
         "id": p.id, "name": p.name, "display_name": p.display_name,
         "role": p.role, "reporting_level": p.reporting_level.value if p.reporting_level else "other",
         "email": p.email, "created_at": p.created_at, "updated_at": p.updated_at,
         "is_archived": p.is_archived, "context_notes": p.context_notes or "",
+        "profile": profile,
         "open_item_count": count,
     }
 
@@ -34,10 +41,12 @@ def list_people(include_archived: bool = False, db: Session = Depends(get_db)):
 
 @router.post("", response_model=PersonResponse)
 def create_person(body: PersonCreate, db: Session = Depends(get_db)):
+    profile = body.profile.model_dump() if body.profile else {**DEFAULT_PROFILE}
     p = Person(
         name=body.name, display_name=body.display_name, role=body.role,
         reporting_level=body.reporting_level, email=body.email,
         context_notes=body.context_notes or "",
+        profile=profile,
     )
     db.add(p)
     db.commit()
@@ -58,7 +67,12 @@ def update_person(person_id: UUID, body: PersonUpdate, db: Session = Depends(get
     p = db.query(Person).filter(Person.id == person_id).first()
     if not p:
         raise HTTPException(404, "Not found")
-    for field, val in body.model_dump(exclude_unset=True).items():
+    data = body.model_dump(exclude_unset=True)
+    if "profile" in data and data["profile"] is not None:
+        p.profile = data.pop("profile")
+        from sqlalchemy.orm.attributes import flag_modified
+        flag_modified(p, "profile")
+    for field, val in data.items():
         setattr(p, field, val)
     db.commit()
     db.refresh(p)
