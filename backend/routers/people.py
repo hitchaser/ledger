@@ -65,6 +65,21 @@ def update_person(person_id: UUID, body: PersonUpdate, db: Session = Depends(get
     return person_response(p, db)
 
 
+@router.delete("/{person_id}")
+def delete_person(person_id: UUID, db: Session = Depends(get_db)):
+    p = db.query(Person).filter(Person.id == person_id).first()
+    if not p:
+        raise HTTPException(404, "Not found")
+    if not p.is_archived:
+        raise HTTPException(400, "Person must be archived before deleting")
+    # Remove junction table links
+    db.query(CaptureItemPerson).filter(CaptureItemPerson.person_id == person_id).delete()
+    db.query(ProfileLog).filter(ProfileLog.person_id == person_id).delete()
+    db.delete(p)
+    db.commit()
+    return {"ok": True}
+
+
 @router.get("/{person_id}/items")
 def get_person_items(person_id: UUID, status: str = "open", db: Session = Depends(get_db)):
     from routers.captures import item_to_response

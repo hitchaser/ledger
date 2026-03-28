@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import ItemCard from './ItemCard';
-import { ArrowLeft, Play, Edit3, Save, Plus, Settings, X, Archive, ArchiveRestore } from 'lucide-react';
+import { ArrowLeft, Play, Edit3, Save, Plus, Settings, X, Archive, ArchiveRestore, Trash2 } from 'lucide-react';
 
 export default function PersonProfile({ refreshKey, onRefresh }) {
   const { id } = useParams();
@@ -17,6 +17,7 @@ export default function PersonProfile({ refreshKey, onRefresh }) {
   const [addNote, setAddNote] = useState('');
   const [editingDetails, setEditingDetails] = useState(false);
   const [detailsForm, setDetailsForm] = useState({ name: '', display_name: '', role: '', reporting_level: '', email: '' });
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   useEffect(() => {
     api.getPerson(id).then(p => {
@@ -64,6 +65,11 @@ export default function PersonProfile({ refreshKey, onRefresh }) {
     navigate('/people');
   };
 
+  const handleDelete = async () => {
+    await api.deletePerson(id);
+    navigate('/people');
+  };
+
   if (!person) return <div className="p-8 text-zinc-600">Loading...</div>;
 
   return (
@@ -84,6 +90,12 @@ export default function PersonProfile({ refreshKey, onRefresh }) {
           <p className="text-sm text-zinc-600">{person.role || 'No role set'} &middot; {person.reporting_level}{person.email ? ` · ${person.email}` : ''}</p>
         </div>
         <div className="flex items-center gap-2">
+          {person.is_archived && (
+            <button onClick={() => setConfirmDelete(true)}
+              className="flex items-center gap-1.5 text-xs rounded-lg px-3 py-2 text-rose-400/70 hover:text-rose-400 hover:bg-rose-500/10 border border-transparent hover:border-rose-500/20 transition-all">
+              <Trash2 size={14} /> Delete
+            </button>
+          )}
           <button onClick={toggleArchive}
             className="flex items-center gap-1.5 text-xs glass glass-hover rounded-lg px-3 py-2 text-zinc-500 hover:text-zinc-200 transition-all">
             {person.is_archived ? <><ArchiveRestore size={14} /> Restore</> : <><Archive size={14} /> Archive</>}
@@ -204,6 +216,21 @@ export default function PersonProfile({ refreshKey, onRefresh }) {
               <p className="text-sm text-zinc-400 whitespace-pre-wrap">{l.content}</p>
             </div>
           ))}
+        </div>
+      )}
+      {confirmDelete && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="glass rounded-xl max-w-sm w-full p-6 border-white/10 shadow-2xl shadow-black/40">
+            <h3 className="text-lg font-semibold text-zinc-100 mb-2">Permanently delete {person.display_name}?</h3>
+            <p className="text-sm text-zinc-400 mb-5">This will remove this person and all their linked items and history. This cannot be undone.</p>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setConfirmDelete(false)} className="text-xs text-zinc-500 px-3 py-1.5">Cancel</button>
+              <button onClick={handleDelete}
+                className="text-xs bg-rose-600/80 hover:bg-rose-500 text-white rounded px-3 py-1.5 border border-rose-500/20 transition-all">
+                Yes, delete permanently
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

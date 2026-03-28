@@ -38,6 +38,7 @@ export const api = {
   updatePerson: (id, data) => request(`/people/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   getPersonItems: (id, status = 'open') => request(`/people/${id}/items?status=${status}`),
   getPersonLogs: (id) => request(`/people/${id}/logs`),
+  deletePerson: (id) => request(`/people/${id}`, { method: 'DELETE' }),
 
   // Projects
   listProjects: (includeArchived = false) => request(`/projects${includeArchived ? '?include_archived=true' : ''}`),
@@ -46,6 +47,7 @@ export const api = {
   updateProject: (id, data) => request(`/projects/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   getProjectItems: (id, status = 'open') => request(`/projects/${id}/items?status=${status}`),
   getProjectLogs: (id) => request(`/projects/${id}/logs`),
+  deleteProject: (id) => request(`/projects/${id}`, { method: 'DELETE' }),
 
   // Meetings
   startMeeting: (data) => request('/meetings', { method: 'POST', body: JSON.stringify(data) }),
