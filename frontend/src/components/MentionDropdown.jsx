@@ -8,7 +8,7 @@ export default function MentionDropdown({ results, selectedIndex, onSelect, posi
     : 'top-full mt-1';
 
   return (
-    <div className={`absolute ${posClass} left-0 right-0 glass rounded-lg border border-white/10 shadow-xl shadow-black/40 overflow-hidden z-[100]`}>
+    <div className={`absolute ${posClass} left-0 right-0 rounded-lg border border-white/10 shadow-xl shadow-black/50 overflow-hidden z-[100] bg-zinc-900/95 backdrop-blur-xl`}>
       {results.map((item, i) => (
         <button
           key={`${item.type}-${item.id}`}
