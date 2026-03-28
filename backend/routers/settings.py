@@ -8,10 +8,10 @@ router = APIRouter(prefix="/api/settings", tags=["settings"])
 DEFAULTS = {
     "ai_enabled": "true",
     "ai_provider": "litellm",
-    "classification_model": "gemini/gemini-2.5-flash-preview-05-20",
-    "profile_model": "gemini/gemini-2.5-flash-preview-05-20",
+    "classification_model": "gemini/gemini-2.5-flash",
+    "profile_model": "gemini/gemini-2.5-flash",
     "ollama_base_url": "http://192.168.1.200:11434",
-    "litellm_base_url": "http://localhost:4000",
+    "litellm_base_url": "http://192.168.1.100:4000",
     "confidence_auto_resolve": "0.85",
     "confidence_suggest": "0.60",
 }
