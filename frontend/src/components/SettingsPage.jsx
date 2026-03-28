@@ -84,6 +84,19 @@ export default function SettingsPage() {
             />
           </div>
 
+          {/* API Key (LiteLLM only) */}
+          {isLiteLLM && (
+            <div>
+              <label className="text-xs text-zinc-500 mb-1 block">LiteLLM API Key</label>
+              <input
+                type="password"
+                value={settings.litellm_api_key || ''}
+                onChange={e => setSettings({ ...settings, litellm_api_key: e.target.value })}
+                className="w-full glass-input rounded px-3 py-2 text-sm text-zinc-200 outline-none"
+              />
+            </div>
+          )}
+
           {/* Classification Model */}
           <div>
             <label className="text-xs text-zinc-500 mb-1 block">Classification Model</label>

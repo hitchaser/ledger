@@ -44,6 +44,7 @@ def get_setting(key: str, default: str = "") -> str:
         "profile_model": "gemini/gemini-2.5-flash",
         "ollama_base_url": "http://192.168.1.200:11434",
         "litellm_base_url": "http://192.168.1.100:4000",
+        "litellm_api_key": "sk-olympus-litellm-master",
         "confidence_auto_resolve": "0.85",
         "confidence_suggest": "0.60",
     }
@@ -71,16 +72,21 @@ def _call_ai(messages: list, model_key: str = "classification_model",
 
     try:
         if provider == "litellm":
-            base_url = get_setting("litellm_base_url", "http://localhost:4000")
+            base_url = get_setting("litellm_base_url", "http://192.168.1.100:4000")
+            api_key = get_setting("litellm_api_key", "")
             body = {
                 "model": model,
                 "messages": messages,
             }
             if format_json:
                 body["response_format"] = {"type": "json_object"}
+            headers = {"Content-Type": "application/json"}
+            if api_key:
+                headers["Authorization"] = f"Bearer {api_key}"
             resp = httpx.post(
                 f"{base_url}/v1/chat/completions",
                 json=body,
+                headers=headers,
                 timeout=60.0,
             )
             resp.raise_for_status()
