@@ -18,10 +18,18 @@ DEFAULTS = {
 }
 
 
+SENSITIVE_KEYS = {"litellm_api_key"}
+
+
 @router.get("")
 def get_settings(db: Session = Depends(get_db)):
     settings = {s.key: s.value for s in db.query(Setting).all()}
-    return {**DEFAULTS, **settings}
+    result = {**DEFAULTS, **settings}
+    # Mask sensitive values
+    for key in SENSITIVE_KEYS:
+        if key in result and result[key]:
+            result[key] = "••••••••"
+    return result
 
 
 @router.put("")

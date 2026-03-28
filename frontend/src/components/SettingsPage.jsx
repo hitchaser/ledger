@@ -20,7 +20,12 @@ export default function SettingsPage() {
     setSaving(true);
     setSaved(false);
     try {
-      const updated = await api.updateSettings(settings);
+      // Don't send masked values back — only send if user changed it
+      const payload = { ...settings };
+      if (payload.litellm_api_key === '••••••••') {
+        delete payload.litellm_api_key;
+      }
+      const updated = await api.updateSettings(payload);
       setSettings(updated);
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
@@ -92,8 +97,10 @@ export default function SettingsPage() {
                 type="password"
                 value={settings.litellm_api_key || ''}
                 onChange={e => setSettings({ ...settings, litellm_api_key: e.target.value })}
+                placeholder="Enter new key to change"
                 className="w-full glass-input rounded px-3 py-2 text-sm text-zinc-200 outline-none"
               />
+              <p className="text-xs text-zinc-600 mt-1">Leave as-is to keep current key. Clear and enter a new value to change.</p>
             </div>
           )}
 
