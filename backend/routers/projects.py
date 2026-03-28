@@ -24,8 +24,11 @@ def project_response(p: ProjectModel, db: Session) -> dict:
 
 
 @router.get("")
-def list_projects(db: Session = Depends(get_db)):
-    projects = db.query(ProjectModel).filter(ProjectModel.is_archived == False).order_by(ProjectModel.name).all()
+def list_projects(include_archived: bool = False, db: Session = Depends(get_db)):
+    q = db.query(ProjectModel)
+    if not include_archived:
+        q = q.filter(ProjectModel.is_archived == False)
+    projects = q.order_by(ProjectModel.name).all()
     return [project_response(p, db) for p in projects]
 
 

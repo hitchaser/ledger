@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import ItemCard from './ItemCard';
-import { ArrowLeft, Play, Edit3, Save, Plus, Settings, X } from 'lucide-react';
+import { ArrowLeft, Play, Edit3, Save, Plus, Settings, X, Archive, ArchiveRestore } from 'lucide-react';
 
 export default function ProjectCard({ refreshKey, onRefresh }) {
   const { id } = useParams();
@@ -59,6 +59,11 @@ export default function ProjectCard({ refreshKey, onRefresh }) {
     }
   };
 
+  const toggleArchive = async () => {
+    await api.updateProject(id, { is_archived: !project.is_archived });
+    navigate('/projects');
+  };
+
   if (!project) return <div className="p-8 text-zinc-600">Loading...</div>;
 
   return (
@@ -78,10 +83,16 @@ export default function ProjectCard({ refreshKey, onRefresh }) {
           </div>
           <p className="text-sm text-zinc-600">{project.short_code ? `[${project.short_code}]` : ''} {project.status.replace('_', ' ')}</p>
         </div>
-        <button onClick={startMeeting}
-          className="flex items-center gap-1.5 bg-blue-600/80 hover:bg-blue-500 text-white text-sm px-4 py-2 rounded-lg border border-blue-500/20 transition-all">
-          <Play size={14} /> Start Meeting
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={toggleArchive}
+            className="flex items-center gap-1.5 text-xs glass glass-hover rounded-lg px-3 py-2 text-zinc-500 hover:text-zinc-200 transition-all">
+            {project.is_archived ? <><ArchiveRestore size={14} /> Restore</> : <><Archive size={14} /> Archive</>}
+          </button>
+          <button onClick={startMeeting}
+            className="flex items-center gap-1.5 bg-blue-600/80 hover:bg-blue-500 text-white text-sm px-4 py-2 rounded-lg border border-blue-500/20 transition-all">
+            <Play size={14} /> Start Meeting
+          </button>
+        </div>
       </div>
 
       {editingDetails && (

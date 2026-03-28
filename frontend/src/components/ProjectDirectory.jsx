@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api/client';
-import { FolderPlus, Search } from 'lucide-react';
+import { FolderPlus, Search, Archive } from 'lucide-react';
 
 const STATUS_COLORS = {
   active: 'bg-blue-500/15 text-blue-400 border border-blue-500/20',
@@ -13,10 +13,11 @@ const STATUS_COLORS = {
 export default function ProjectDirectory({ refreshKey }) {
   const [projects, setProjects] = useState([]);
   const [search, setSearch] = useState('');
+  const [showArchived, setShowArchived] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ name: '', short_code: '', context_notes: '' });
 
-  useEffect(() => { api.listProjects().then(setProjects).catch(console.error); }, [refreshKey]);
+  useEffect(() => { api.listProjects(showArchived).then(setProjects).catch(console.error); }, [refreshKey, showArchived]);
 
   const filtered = projects.filter(p =>
     p.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -57,10 +58,16 @@ export default function ProjectDirectory({ refreshKey }) {
         </form>
       )}
 
-      <div className="relative mb-3">
-        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-600" />
-        <input type="text" placeholder="Search projects..." value={search} onChange={e => setSearch(e.target.value)}
-          className="w-full glass-input rounded-lg pl-8 pr-3 py-2 text-sm text-zinc-300 outline-none" />
+      <div className="flex items-center gap-2 mb-3">
+        <div className="relative flex-1">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-600" />
+          <input type="text" placeholder="Search projects..." value={search} onChange={e => setSearch(e.target.value)}
+            className="w-full glass-input rounded-lg pl-8 pr-3 py-2 text-sm text-zinc-300 outline-none" />
+        </div>
+        <label className="flex items-center gap-1.5 text-xs text-zinc-600 cursor-pointer whitespace-nowrap">
+          <input type="checkbox" checked={showArchived} onChange={e => setShowArchived(e.target.checked)} className="rounded" />
+          <Archive size={12} /> Archived
+        </label>
       </div>
 
       <div className="flex flex-col gap-1">
@@ -68,8 +75,9 @@ export default function ProjectDirectory({ refreshKey }) {
           <Link key={p.id} to={`/projects/${p.id}`}
             className="flex items-center justify-between px-3 py-2.5 rounded-lg hover:bg-white/[0.04] transition-all">
             <div className="flex items-center gap-2">
-              <span className="text-sm text-zinc-200 font-medium">{p.name}</span>
+              <span className={`text-sm font-medium ${p.is_archived ? 'text-zinc-500' : 'text-zinc-200'}`}>{p.name}</span>
               {p.short_code && <span className="text-xs text-zinc-600">[{p.short_code}]</span>}
+              {p.is_archived && <span className="text-xs text-zinc-600 badge bg-zinc-500/10 border border-zinc-500/15">archived</span>}
             </div>
             <div className="flex items-center gap-2">
               <span className={`badge ${STATUS_COLORS[p.status] || STATUS_COLORS.active}`}>{p.status.replace('_', ' ')}</span>

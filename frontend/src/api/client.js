@@ -32,7 +32,7 @@ export const api = {
   unlinkProject: (itemId, projectId) => request(`/captures/${itemId}/link-project/${projectId}`, { method: 'DELETE' }),
 
   // People
-  listPeople: () => request('/people'),
+  listPeople: (includeArchived = false) => request(`/people${includeArchived ? '?include_archived=true' : ''}`),
   createPerson: (data) => request('/people', { method: 'POST', body: JSON.stringify(data) }),
   getPerson: (id) => request(`/people/${id}`),
   updatePerson: (id, data) => request(`/people/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
@@ -40,7 +40,7 @@ export const api = {
   getPersonLogs: (id) => request(`/people/${id}/logs`),
 
   // Projects
-  listProjects: () => request('/projects'),
+  listProjects: (includeArchived = false) => request(`/projects${includeArchived ? '?include_archived=true' : ''}`),
   createProject: (data) => request('/projects', { method: 'POST', body: JSON.stringify(data) }),
   getProject: (id) => request(`/projects/${id}`),
   updateProject: (id, data) => request(`/projects/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),

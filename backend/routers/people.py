@@ -24,8 +24,11 @@ def person_response(p: Person, db: Session) -> dict:
 
 
 @router.get("")
-def list_people(db: Session = Depends(get_db)):
-    people = db.query(Person).filter(Person.is_archived == False).order_by(Person.display_name).all()
+def list_people(include_archived: bool = False, db: Session = Depends(get_db)):
+    q = db.query(Person)
+    if not include_archived:
+        q = q.filter(Person.is_archived == False)
+    people = q.order_by(Person.display_name).all()
     return [person_response(p, db) for p in people]
 
 
