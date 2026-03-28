@@ -121,12 +121,55 @@ export default function MeetingMode({ refreshKey, onRefresh }) {
         </div>
         <p className="text-xs text-zinc-600 mb-3">{entity.role || entity.status || ''}</p>
 
+        {/* Structured Profile (person meetings) */}
+        {isPerson && entity.profile && (
+          <div className="mb-4">
+            <h4 className="text-xs text-zinc-600 font-medium uppercase tracking-wide mb-2">Profile</h4>
+            <div className="glass rounded p-2 space-y-1">
+              {[
+                { key: 'spouse', label: 'Spouse' },
+                { key: 'anniversary', label: 'Anniversary' },
+                { key: 'birthday', label: 'Birthday' },
+                { key: 'children', label: 'Children', isList: true },
+                { key: 'pets', label: 'Pets', isList: true },
+                { key: 'hobbies', label: 'Hobbies' },
+                { key: 'location', label: 'Location' },
+              ].map(({ key, label, isList }) => {
+                const val = entity.profile[key];
+                const display = isList ? (val && val.length > 0 ? val.join(', ') : '') : (val || '');
+                if (!display) return null;
+                return (
+                  <div key={key} className="flex items-baseline gap-2">
+                    <span className="text-xs text-zinc-600 w-20 flex-shrink-0 text-right">{label}</span>
+                    <span className="text-xs text-zinc-300">{display}</span>
+                  </div>
+                );
+              })}
+              {entity.profile.general && (
+                <>
+                  <div className="border-t border-white/[0.04] my-1" />
+                  <pre className="text-xs text-zinc-400 whitespace-pre-wrap font-sans">{entity.profile.general}</pre>
+                </>
+              )}
+              {!entity.profile.spouse && !entity.profile.birthday && !(entity.profile.children?.length) && !entity.profile.general && (
+                <p className="text-xs text-zinc-700 italic">No profile details yet</p>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Context Notes (project meetings or fallback) */}
+        {(!isPerson || !entity.profile) && (
+          <div className="mb-4">
+            <h4 className="text-xs text-zinc-600 font-medium uppercase tracking-wide mb-2">Context Notes</h4>
+            <pre className="text-sm text-zinc-400 whitespace-pre-wrap font-sans glass rounded p-2 min-h-[60px]">
+              {notes || 'No notes yet.'}
+            </pre>
+          </div>
+        )}
+
         <div className="mb-4">
-          <h4 className="text-xs text-zinc-600 font-medium uppercase tracking-wide mb-2">Context Notes</h4>
-          <pre className="text-sm text-zinc-400 whitespace-pre-wrap font-sans glass rounded p-2 min-h-[60px]">
-            {notes || 'No notes yet.'}
-          </pre>
-          <div className="flex gap-2 mt-2">
+          <div className="flex gap-2">
             <input placeholder="Add note..." value={addNote} onChange={e => setAddNote(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && addContextNote()}
               className="flex-1 glass-input rounded px-2 py-1 text-xs text-zinc-300 outline-none" />
