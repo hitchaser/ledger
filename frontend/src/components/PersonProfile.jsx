@@ -231,7 +231,7 @@ export default function PersonProfile({ refreshKey, onRefresh }) {
                 value={profileForm.general || ''}
                 onChange={e => setProfileForm({ ...profileForm, general: e.target.value })}
                 placeholder="Any additional notes..."
-                className="w-full glass-input rounded px-3 py-1.5 text-sm text-zinc-200 outline-none resize-none min-h-[60px]"
+                className="w-full glass-input rounded px-3 py-1.5 text-sm text-zinc-200 outline-none resize-y min-h-[160px]"
               />
             </div>
             <div className="col-span-2 flex justify-end gap-2 mt-1">
