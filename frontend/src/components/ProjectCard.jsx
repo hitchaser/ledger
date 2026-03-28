@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import ItemCard from './ItemCard';
-import { ArrowLeft, Play, Edit3, Save, Plus } from 'lucide-react';
+import { ArrowLeft, Play, Edit3, Save, Plus, Settings, X } from 'lucide-react';
 
 export default function ProjectCard({ refreshKey, onRefresh }) {
   const { id } = useParams();
@@ -14,12 +14,25 @@ export default function ProjectCard({ refreshKey, onRefresh }) {
   const [editingNotes, setEditingNotes] = useState(false);
   const [notes, setNotes] = useState('');
   const [addNote, setAddNote] = useState('');
+  const [editingDetails, setEditingDetails] = useState(false);
+  const [detailsForm, setDetailsForm] = useState({ name: '', short_code: '', status: '' });
 
   useEffect(() => {
-    api.getProject(id).then(p => { setProject(p); setNotes(p.context_notes || ''); });
+    api.getProject(id).then(p => {
+      setProject(p);
+      setNotes(p.context_notes || '');
+      setDetailsForm({ name: p.name, short_code: p.short_code || '', status: p.status });
+    });
     api.getProjectItems(id).then(setItems);
     api.getProjectLogs(id).then(setLogs);
   }, [id, refreshKey]);
+
+  const saveDetails = async () => {
+    await api.updateProject(id, detailsForm);
+    const updated = await api.getProject(id);
+    setProject(updated);
+    setEditingDetails(false);
+  };
 
   const saveNotes = async () => {
     await api.updateProject(id, { context_notes: notes });
@@ -54,14 +67,55 @@ export default function ProjectCard({ refreshKey, onRefresh }) {
 
       <div className="flex items-start justify-between mb-4">
         <div>
-          <h2 className="text-xl font-semibold text-zinc-100">{project.name}</h2>
-          <p className="text-sm text-zinc-600">{project.short_code ? `[${project.short_code}]` : ''} {project.status}</p>
+          <div className="flex items-center gap-2">
+            <h2 className="text-xl font-semibold text-zinc-100">{project.name}</h2>
+            <button onClick={() => setEditingDetails(!editingDetails)}
+              className="text-zinc-600 hover:text-zinc-300 transition-colors" title="Edit details">
+              <Settings size={16} />
+            </button>
+          </div>
+          <p className="text-sm text-zinc-600">{project.short_code ? `[${project.short_code}]` : ''} {project.status.replace('_', ' ')}</p>
         </div>
         <button onClick={startMeeting}
           className="flex items-center gap-1.5 bg-blue-600/80 hover:bg-blue-500 text-white text-sm px-4 py-2 rounded-lg border border-blue-500/20 transition-all">
           <Play size={14} /> Start Meeting
         </button>
       </div>
+
+      {editingDetails && (
+        <div className="mb-4 p-3 glass rounded-lg">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs text-zinc-500 font-medium uppercase tracking-wide">Edit Details</span>
+            <button onClick={() => setEditingDetails(false)} className="text-zinc-600 hover:text-zinc-300"><X size={14} /></button>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-xs text-zinc-600 mb-0.5 block">Project Name</label>
+              <input value={detailsForm.name} onChange={e => setDetailsForm({...detailsForm, name: e.target.value})}
+                className="w-full glass-input rounded px-3 py-1.5 text-sm text-zinc-200 outline-none" />
+            </div>
+            <div>
+              <label className="text-xs text-zinc-600 mb-0.5 block">Short Code</label>
+              <input value={detailsForm.short_code} onChange={e => setDetailsForm({...detailsForm, short_code: e.target.value})}
+                className="w-full glass-input rounded px-3 py-1.5 text-sm text-zinc-200 outline-none" placeholder="e.g. PBJY" />
+            </div>
+            <div className="col-span-2">
+              <label className="text-xs text-zinc-600 mb-0.5 block">Status</label>
+              <select value={detailsForm.status} onChange={e => setDetailsForm({...detailsForm, status: e.target.value})}
+                className="w-full glass-input rounded px-3 py-1.5 text-sm text-zinc-300 outline-none">
+                <option value="active">Active</option>
+                <option value="on_hold">On Hold</option>
+                <option value="complete">Complete</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
+            </div>
+            <div className="col-span-2 flex justify-end gap-2 mt-1">
+              <button onClick={() => setEditingDetails(false)} className="text-xs text-zinc-600 px-3 py-1">Cancel</button>
+              <button onClick={saveDetails} className="text-xs bg-blue-600/80 hover:bg-blue-500 text-white rounded px-3 py-1.5 border border-blue-500/20 transition-all">Save Changes</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="mb-4 p-3 glass rounded-lg">
         <div className="flex items-center justify-between mb-2">

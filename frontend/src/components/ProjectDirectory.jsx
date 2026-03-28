@@ -67,11 +67,9 @@ export default function ProjectDirectory({ refreshKey }) {
         {filtered.map(p => (
           <Link key={p.id} to={`/projects/${p.id}`}
             className="flex items-center justify-between px-3 py-2.5 rounded-lg hover:bg-white/[0.04] transition-all">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded bg-white/[0.06] border border-white/[0.08] flex items-center justify-center text-xs font-bold text-zinc-400">
-                {(p.short_code || p.name.slice(0, 2)).toUpperCase()}
-              </div>
+            <div className="flex items-center gap-2">
               <span className="text-sm text-zinc-200 font-medium">{p.name}</span>
+              {p.short_code && <span className="text-xs text-zinc-600">[{p.short_code}]</span>}
             </div>
             <div className="flex items-center gap-2">
               <span className={`badge ${STATUS_COLORS[p.status] || STATUS_COLORS.active}`}>{p.status.replace('_', ' ')}</span>
