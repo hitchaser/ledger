@@ -184,22 +184,40 @@ async def ai_worker():
                             }
                             update = parse_profile_update(item.raw_text, profile)
                             field = update.get("field", "general")
+                            action = update.get("action", "add")
                             value = update.get("value", item.raw_text)
 
+                            # Deep copy profile to ensure SQLAlchemy detects changes
+                            import copy
+                            profile = copy.deepcopy(profile)
+
                             if field in ("children", "pets"):
-                                current_list = profile.get(field, [])
-                                # Dedup: case-insensitive check
-                                if not any(v.lower() == value.lower() for v in current_list):
-                                    current_list.append(value)
-                                    profile[field] = current_list
+                                current_list = list(profile.get(field, []))
+                                if action == "remove":
+                                    # Remove matching entry (case-insensitive)
+                                    if value:
+                                        current_list = [v for v in current_list if v.lower() != value.lower()]
+                                    else:
+                                        current_list = []  # "no longer has pets" → clear all
+                                elif action in ("add", "replace"):
+                                    # Only add if not already present (case-insensitive)
+                                    if value and not any(v.lower() == value.lower() for v in current_list):
+                                        current_list.append(value)
+                                profile[field] = current_list
                             elif field == "general":
-                                existing = profile.get("general", "")
-                                profile["general"] = (existing + "\n" + value).strip() if existing else value
+                                if action == "add":
+                                    existing = profile.get("general", "")
+                                    profile["general"] = (existing + "\n" + value).strip() if existing else value
                             else:
-                                profile[field] = value
+                                # String fields: spouse, anniversary, birthday, hobbies, location
+                                if action == "replace":
+                                    profile[field] = value
+                                elif action == "remove":
+                                    profile[field] = ""
+                                else:
+                                    profile[field] = value
 
                             person.profile = profile
-                            # Force SQLAlchemy to detect JSON change
                             from sqlalchemy.orm.attributes import flag_modified
                             flag_modified(person, "profile")
 

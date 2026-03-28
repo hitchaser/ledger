@@ -177,25 +177,37 @@ def parse_profile_update(raw_text: str, current_profile: dict) -> dict:
 
 Profile fields: spouse, anniversary, children, pets, birthday, hobbies, location, general
 
-Current children: {children_str}
-Current pets: {pets_str}
+Current profile:
+- Spouse: {current_profile.get('spouse') or 'Unknown'}
+- Anniversary: {current_profile.get('anniversary') or 'Unknown'}
+- Birthday: {current_profile.get('birthday') or 'Unknown'}
+- Children: {children_str}
+- Pets: {pets_str}
+- Hobbies: {current_profile.get('hobbies') or 'Unknown'}
+- Location: {current_profile.get('location') or 'Unknown'}
 
 Text: "{raw_text}"
 
-Return ONLY a JSON object:
-{{"field": "one of: spouse, anniversary, children, pets, birthday, hobbies, location, general", "value": "the extracted value only"}}
+Return ONLY a JSON object with:
+- "field": one of spouse, anniversary, children, pets, birthday, hobbies, location, general
+- "action": "add", "remove", or "replace"
+- "value": the extracted value (a single name/item for children/pets, NOT the full list)
+
+IMPORTANT RULES:
+- For NEGATION ("doesn't have", "not", "no longer", "remove", "actually doesn't") → use action "remove"
+- For CORRECTIONS ("actually has", "not Susan but Sarah") → use action "remove" for the wrong value, or "replace"
+- For NEW information ("has a daughter named X") → use action "add"
+- For children/pets: return ONLY ONE name per response, never the full list
+- For string fields (spouse, birthday, etc.): action is always "replace"
 
 Examples:
-"has a daughter named Susan" → {{"field": "children", "value": "Susan"}}
-"wife is Sarah" → {{"field": "spouse", "value": "Sarah"}}
-"lives in Austin Texas" → {{"field": "location", "value": "Austin, TX"}}
-"birthday is March 3" → {{"field": "birthday", "value": "March 3"}}
-"has a golden retriever named Max" → {{"field": "pets", "value": "Max (golden retriever)"}}
-"enjoys golf and fishing" → {{"field": "hobbies", "value": "Golf, fishing"}}
-"anniversary is June 15" → {{"field": "anniversary", "value": "June 15"}}
-
-For children/pets, return ONLY the name (and type for pets). Do not repeat existing entries.
-For general catch-all info that doesn't fit a field, use "general"."""
+"has a daughter named Susan" → {{"field": "children", "action": "add", "value": "Susan"}}
+"doesn't have a daughter named Susan" → {{"field": "children", "action": "remove", "value": "Susan"}}
+"no longer has a dog" → {{"field": "pets", "action": "remove", "value": ""}}
+"wife is Sarah" → {{"field": "spouse", "action": "replace", "value": "Sarah"}}
+"no longer married" → {{"field": "spouse", "action": "replace", "value": ""}}
+"lives in Austin Texas" → {{"field": "location", "action": "replace", "value": "Austin, TX"}}
+"birthday is March 3" → {{"field": "birthday", "action": "replace", "value": "March 3"}}"""
 
     content = _call_ai(
         [{"role": "user", "content": prompt}],
@@ -212,22 +224,25 @@ For general catch-all info that doesn't fit a field, use "general"."""
 
     # Keyword fallback
     text_lower = raw_text.lower()
-    if any(w in text_lower for w in ['daughter', 'son', 'child', 'kid', 'baby']):
-        return {"field": "children", "value": raw_text}
-    if any(w in text_lower for w in ['wife', 'husband', 'spouse', 'partner', 'married to']):
-        return {"field": "spouse", "value": raw_text}
-    if any(w in text_lower for w in ['dog', 'cat', 'pet', 'puppy', 'kitten', 'fish', 'bird']):
-        return {"field": "pets", "value": raw_text}
-    if any(w in text_lower for w in ['birthday', 'born on', 'born in']):
-        return {"field": "birthday", "value": raw_text}
-    if 'anniversary' in text_lower:
-        return {"field": "anniversary", "value": raw_text}
-    if any(w in text_lower for w in ['hobby', 'hobbies', 'enjoys', 'likes to', 'plays', 'fan of']):
-        return {"field": "hobbies", "value": raw_text}
-    if any(w in text_lower for w in ['lives in', 'moved to', 'based in', 'located in']):
-        return {"field": "location", "value": raw_text}
+    is_negation = any(w in text_lower for w in ["doesn't", "does not", "don't", "no longer", "not a", "remove", "isn't", "is not"])
+    action = "remove" if is_negation else "add"
 
-    return {"field": "general", "value": raw_text}
+    if any(w in text_lower for w in ['daughter', 'son', 'child', 'kid', 'baby']):
+        return {"field": "children", "action": action, "value": raw_text}
+    if any(w in text_lower for w in ['wife', 'husband', 'spouse', 'partner', 'married to']):
+        return {"field": "spouse", "action": "replace", "value": "" if is_negation else raw_text}
+    if any(w in text_lower for w in ['dog', 'cat', 'pet', 'puppy', 'kitten', 'fish', 'bird']):
+        return {"field": "pets", "action": action, "value": raw_text}
+    if any(w in text_lower for w in ['birthday', 'born on', 'born in']):
+        return {"field": "birthday", "action": "replace", "value": "" if is_negation else raw_text}
+    if 'anniversary' in text_lower:
+        return {"field": "anniversary", "action": "replace", "value": "" if is_negation else raw_text}
+    if any(w in text_lower for w in ['hobby', 'hobbies', 'enjoys', 'likes to', 'plays', 'fan of']):
+        return {"field": "hobbies", "action": "replace", "value": "" if is_negation else raw_text}
+    if any(w in text_lower for w in ['lives in', 'moved to', 'based in', 'located in']):
+        return {"field": "location", "action": "replace", "value": "" if is_negation else raw_text}
+
+    return {"field": "general", "action": "add", "value": raw_text}
 
 
 # ── Meeting Summary ──
