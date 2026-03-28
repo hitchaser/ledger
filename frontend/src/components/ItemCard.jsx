@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Check, X, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
+import { Check, X, Loader2, ChevronDown, ChevronUp, Pencil, Save } from 'lucide-react';
 import { api } from '../api/client';
 import { Link } from 'react-router-dom';
 
@@ -20,6 +20,9 @@ const URGENCY_COLORS = {
   someday: 'bg-zinc-500/10 text-zinc-500 border border-zinc-500/15',
 };
 
+const TYPE_OPTIONS = ['', 'todo', 'followup', 'reminder', 'discussion', 'goal', 'note'];
+const URGENCY_OPTIONS = ['', 'today', 'this_week', 'this_month', 'someday'];
+
 function timeAgo(dateStr) {
   const diff = Date.now() - new Date(dateStr).getTime();
   const mins = Math.floor(diff / 60000);
@@ -33,11 +36,14 @@ function timeAgo(dateStr) {
 
 export default function ItemCard({ item, onUpdate, compact = false, readonly = false }) {
   const [expanded, setExpanded] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [editType, setEditType] = useState('');
+  const [editUrgency, setEditUrgency] = useState('');
   const type = item.effective_type;
   const urgency = item.effective_urgency;
   const isProcessing = !item.ai_processed_at && !item.manual_type;
   const isDone = item.status === 'done';
-  const displayText = (!expanded && item.raw_text.length > 120) ? item.raw_text.slice(0, 120) + '...' : item.raw_text;
+  const displayText = (!expanded && !editing && item.raw_text.length > 120) ? item.raw_text.slice(0, 120) + '...' : item.raw_text;
 
   const markDone = async () => {
     await api.updateCapture(item.id, { status: 'done' });
@@ -46,6 +52,21 @@ export default function ItemCard({ item, onUpdate, compact = false, readonly = f
 
   const deleteItem = async () => {
     await api.deleteCapture(item.id);
+    onUpdate?.();
+  };
+
+  const startEdit = () => {
+    setEditType(item.manual_type || item.effective_type || '');
+    setEditUrgency(item.manual_urgency || item.effective_urgency || '');
+    setEditing(true);
+  };
+
+  const saveEdit = async () => {
+    await api.updateCapture(item.id, {
+      manual_type: editType || '',
+      manual_urgency: editUrgency || '',
+    });
+    setEditing(false);
     onUpdate?.();
   };
 
@@ -65,33 +86,64 @@ export default function ItemCard({ item, onUpdate, compact = false, readonly = f
         <div className="flex-1 min-w-0">
           <p className={`text-sm leading-relaxed ${isDone ? 'text-zinc-500 line-through' : 'text-zinc-300'}`}>
             {displayText}
-            {item.raw_text.length > 120 && (
+            {item.raw_text.length > 120 && !editing && (
               <button onClick={() => setExpanded(!expanded)} className="ml-1 text-zinc-600 hover:text-zinc-400">
                 {expanded ? <ChevronUp size={14} className="inline" /> : <ChevronDown size={14} className="inline" />}
               </button>
             )}
           </p>
-          <div className="flex flex-wrap items-center gap-1.5 mt-2">
-            {isProcessing && <span className="badge bg-white/5 text-zinc-500 border border-white/10"><Loader2 size={10} className="inline animate-spin mr-1" />classifying</span>}
-            {type && <span className={`badge ${TYPE_COLORS[type] || TYPE_COLORS.note}`}>{type.replace('_', ' ')}</span>}
-            {urgency && <span className={`badge ${URGENCY_COLORS[urgency] || URGENCY_COLORS.someday}`}>{urgency.replace('_', ' ')}</span>}
-            {item.linked_people?.map(p => (
-              <Link key={p.id} to={`/people/${p.id}`} className="badge bg-indigo-500/10 text-indigo-400 border border-indigo-500/15 hover:bg-indigo-500/20 cursor-pointer transition-colors">
-                {p.display_name}
-              </Link>
-            ))}
-            {item.linked_projects?.map(p => (
-              <Link key={p.id} to={`/projects/${p.id}`} className="badge bg-cyan-500/10 text-cyan-400 border border-cyan-500/15 hover:bg-cyan-500/20 cursor-pointer transition-colors">
-                {p.short_code || p.name}
-              </Link>
-            ))}
-            <span className="text-xs text-zinc-700 ml-auto">{timeAgo(item.created_at)}</span>
-          </div>
+
+          {editing ? (
+            <div className="flex flex-wrap items-center gap-2 mt-2">
+              <select value={editType} onChange={e => setEditType(e.target.value)}
+                className="glass-input rounded px-2 py-1 text-xs text-zinc-300 outline-none">
+                <option value="">Type...</option>
+                {TYPE_OPTIONS.filter(Boolean).map(t => (
+                  <option key={t} value={t}>{t.replace('_', ' ')}</option>
+                ))}
+              </select>
+              <select value={editUrgency} onChange={e => setEditUrgency(e.target.value)}
+                className="glass-input rounded px-2 py-1 text-xs text-zinc-300 outline-none">
+                <option value="">Urgency...</option>
+                {URGENCY_OPTIONS.filter(Boolean).map(u => (
+                  <option key={u} value={u}>{u.replace('_', ' ')}</option>
+                ))}
+              </select>
+              <button onClick={saveEdit} className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 transition-colors">
+                <Save size={12} /> Save
+              </button>
+              <button onClick={() => setEditing(false)} className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors">
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <div className="flex flex-wrap items-center gap-1.5 mt-2">
+              {isProcessing && <span className="badge bg-white/5 text-zinc-500 border border-white/10"><Loader2 size={10} className="inline animate-spin mr-1" />classifying</span>}
+              {type && <span className={`badge ${TYPE_COLORS[type] || TYPE_COLORS.note}`}>{type.replace('_', ' ')}</span>}
+              {urgency && <span className={`badge ${URGENCY_COLORS[urgency] || URGENCY_COLORS.someday}`}>{urgency.replace('_', ' ')}</span>}
+              {item.linked_people?.map(p => (
+                <Link key={p.id} to={`/people/${p.id}`} className="badge bg-indigo-500/10 text-indigo-400 border border-indigo-500/15 hover:bg-indigo-500/20 cursor-pointer transition-colors">
+                  {p.display_name}
+                </Link>
+              ))}
+              {item.linked_projects?.map(p => (
+                <Link key={p.id} to={`/projects/${p.id}`} className="badge bg-cyan-500/10 text-cyan-400 border border-cyan-500/15 hover:bg-cyan-500/20 cursor-pointer transition-colors">
+                  {p.short_code || p.name}
+                </Link>
+              ))}
+              <span className="text-xs text-zinc-700 ml-auto">{timeAgo(item.created_at)}</span>
+            </div>
+          )}
         </div>
-        {!readonly && (
-          <button onClick={deleteItem} className="opacity-0 group-hover:opacity-100 mt-0.5 p-1 text-zinc-700 hover:text-rose-400 transition-all" title="Delete">
-            <X size={14} />
-          </button>
+        {!readonly && !editing && (
+          <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-all">
+            <button onClick={startEdit} className="mt-0.5 p-1 text-zinc-700 hover:text-zinc-400" title="Edit">
+              <Pencil size={13} />
+            </button>
+            <button onClick={deleteItem} className="mt-0.5 p-1 text-zinc-700 hover:text-rose-400" title="Delete">
+              <X size={14} />
+            </button>
+          </div>
         )}
       </div>
     </div>
