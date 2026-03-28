@@ -1,11 +1,83 @@
 import { useState, useEffect } from 'react';
 import { api } from '../api/client';
-import { Save, RotateCcw } from 'lucide-react';
+import { Save, ChevronDown } from 'lucide-react';
 
-const PROVIDER_OPTIONS = [
-  { value: 'litellm', label: 'LiteLLM (Cloud — Gemini, GPT, Claude, etc.)' },
-  { value: 'ollama', label: 'Ollama (Local — Qwen, Llama, Mistral, etc.)' },
+const MODEL_PRESETS = [
+  { group: 'LiteLLM (Cloud)', provider: 'litellm', models: [
+    { value: 'gemini/gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
+  ]},
+  { group: 'Ollama (Local)', provider: 'ollama', models: [
+    { value: 'qwen3-coder:30b', label: 'Qwen3-Coder 30B' },
+    { value: 'mistral-small3', label: 'Mistral Small 3' },
+    { value: 'phi4:14b', label: 'Phi-4 14B' },
+    { value: 'llama3.1:8b', label: 'Llama 3.1 8B' },
+    { value: 'qwen3.5:4b', label: 'Qwen3.5 4B' },
+  ]},
 ];
+
+function ModelSelector({ value, onChange, onProviderChange, label, description }) {
+  const [custom, setCustom] = useState(false);
+
+  // Check if current value matches a preset
+  const isPreset = MODEL_PRESETS.some(g => g.models.some(m => m.value === value));
+  const showCustom = custom || !isPreset;
+
+  const handlePresetSelect = (modelValue, provider) => {
+    onChange(modelValue);
+    if (onProviderChange) onProviderChange(provider);
+    setCustom(false);
+  };
+
+  return (
+    <div>
+      <label className="text-xs text-zinc-500 mb-1 block">{label}</label>
+      {!showCustom ? (
+        <div>
+          <div className="grid gap-1.5">
+            {MODEL_PRESETS.map(group => (
+              <div key={group.group}>
+                <span className="text-xs text-zinc-600">{group.group}</span>
+                <div className="flex flex-wrap gap-1.5 mt-1">
+                  {group.models.map(m => (
+                    <button
+                      key={m.value}
+                      onClick={() => handlePresetSelect(m.value, group.provider)}
+                      className={`px-2.5 py-1.5 rounded text-xs transition-all ${
+                        value === m.value
+                          ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                          : 'glass glass-hover text-zinc-400 hover:text-zinc-200'
+                      }`}
+                    >
+                      {m.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+          <button onClick={() => setCustom(true)} className="text-xs text-zinc-600 hover:text-zinc-400 mt-2 transition-colors">
+            Use custom model name...
+          </button>
+        </div>
+      ) : (
+        <div>
+          <div className="flex gap-2">
+            <input
+              value={value}
+              onChange={e => onChange(e.target.value)}
+              placeholder="model-name:tag"
+              className="flex-1 glass-input rounded px-3 py-2 text-sm text-zinc-200 outline-none"
+            />
+            <button onClick={() => setCustom(false)} className="text-xs text-zinc-600 hover:text-zinc-400 px-2 transition-colors">
+              Presets
+            </button>
+          </div>
+        </div>
+      )}
+      <p className="text-xs text-zinc-600 mt-1">{description}</p>
+    </div>
+  );
+}
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState(null);
@@ -20,7 +92,6 @@ export default function SettingsPage() {
     setSaving(true);
     setSaved(false);
     try {
-      // Don't send masked values back — only send if user changed it
       const payload = { ...settings };
       if (payload.litellm_api_key === '••••••••') {
         delete payload.litellm_api_key;
@@ -39,6 +110,10 @@ export default function SettingsPage() {
 
   const isLiteLLM = settings.ai_provider === 'litellm';
 
+  const setProvider = (provider) => {
+    setSettings({ ...settings, ai_provider: provider });
+  };
+
   return (
     <div className="max-w-2xl mx-auto px-4 py-4">
       <h2 className="text-lg font-semibold text-zinc-200 mb-4">Settings</h2>
@@ -47,7 +122,7 @@ export default function SettingsPage() {
       <div className="glass rounded-lg p-4 mb-4">
         <h3 className="text-sm font-medium text-zinc-300 mb-3">AI Configuration</h3>
 
-        <div className="space-y-3">
+        <div className="space-y-4">
           {/* AI Enabled */}
           <div className="flex items-center justify-between">
             <label className="text-sm text-zinc-400">AI Enabled</label>
@@ -55,7 +130,7 @@ export default function SettingsPage() {
               onClick={() => setSettings({ ...settings, ai_enabled: settings.ai_enabled === 'true' ? 'false' : 'true' })}
               className={`w-10 h-5 rounded-full transition-colors relative ${settings.ai_enabled === 'true' ? 'bg-blue-600' : 'bg-zinc-700'}`}
             >
-              <div className={`w-4 h-4 rounded-full bg-white absolute top-0.5 transition-all ${settings.ai_enabled === 'true' ? 'left-5.5 right-0.5' : 'left-0.5'}`}
+              <div className="w-4 h-4 rounded-full bg-white absolute top-0.5 transition-all"
                 style={{ left: settings.ai_enabled === 'true' ? '22px' : '2px' }} />
             </button>
           </div>
@@ -63,15 +138,24 @@ export default function SettingsPage() {
           {/* Provider */}
           <div>
             <label className="text-xs text-zinc-500 mb-1 block">Provider</label>
-            <select
-              value={settings.ai_provider}
-              onChange={e => setSettings({ ...settings, ai_provider: e.target.value })}
-              className="w-full glass-input rounded px-3 py-2 text-sm text-zinc-200 outline-none"
-            >
-              {PROVIDER_OPTIONS.map(o => (
-                <option key={o.value} value={o.value}>{o.label}</option>
+            <div className="flex gap-2">
+              {[
+                { value: 'litellm', label: 'LiteLLM (Cloud)' },
+                { value: 'ollama', label: 'Ollama (Local)' },
+              ].map(o => (
+                <button
+                  key={o.value}
+                  onClick={() => setProvider(o.value)}
+                  className={`flex-1 px-3 py-2 rounded text-sm transition-all ${
+                    settings.ai_provider === o.value
+                      ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                      : 'glass text-zinc-500 hover:text-zinc-300'
+                  }`}
+                >
+                  {o.label}
+                </button>
               ))}
-            </select>
+            </div>
           </div>
 
           {/* Provider URL */}
@@ -105,28 +189,22 @@ export default function SettingsPage() {
           )}
 
           {/* Classification Model */}
-          <div>
-            <label className="text-xs text-zinc-500 mb-1 block">Classification Model</label>
-            <input
-              value={settings.classification_model}
-              onChange={e => setSettings({ ...settings, classification_model: e.target.value })}
-              placeholder={isLiteLLM ? 'gemini/gemini-2.5-flash-preview-05-20' : 'qwen3-coder:30b'}
-              className="w-full glass-input rounded px-3 py-2 text-sm text-zinc-200 outline-none"
-            />
-            <p className="text-xs text-zinc-600 mt-1">Used for classifying captures (type, urgency, linking)</p>
-          </div>
+          <ModelSelector
+            value={settings.classification_model}
+            onChange={v => setSettings({ ...settings, classification_model: v })}
+            onProviderChange={setProvider}
+            label="Classification Model"
+            description="Used for classifying captures (type, urgency, linking)"
+          />
 
           {/* Profile Model */}
-          <div>
-            <label className="text-xs text-zinc-500 mb-1 block">Profile Parsing Model</label>
-            <input
-              value={settings.profile_model}
-              onChange={e => setSettings({ ...settings, profile_model: e.target.value })}
-              placeholder={isLiteLLM ? 'gemini/gemini-2.5-flash-preview-05-20' : 'qwen3-coder:30b'}
-              className="w-full glass-input rounded px-3 py-2 text-sm text-zinc-200 outline-none"
-            />
-            <p className="text-xs text-zinc-600 mt-1">Used for extracting profile fields from captures</p>
-          </div>
+          <ModelSelector
+            value={settings.profile_model}
+            onChange={v => setSettings({ ...settings, profile_model: v })}
+            onProviderChange={setProvider}
+            label="Profile Parsing Model"
+            description="Used for extracting profile fields from captures"
+          />
         </div>
       </div>
 
