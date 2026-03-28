@@ -59,6 +59,14 @@ def update_project(project_id: UUID, body: ProjectUpdate, db: Session = Depends(
         raise HTTPException(404, "Not found")
     for field, val in body.model_dump(exclude_unset=True).items():
         setattr(p, field, val)
+
+    # Auto-archive when status set to complete or cancelled
+    if p.status in ("complete", "cancelled"):
+        p.is_archived = True
+    # Auto-unarchive when status set back to active or on_hold
+    elif p.status in ("active", "on_hold"):
+        p.is_archived = False
+
     db.commit()
     db.refresh(p)
     return project_response(p, db)

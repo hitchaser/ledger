@@ -13,16 +13,19 @@ const STATUS_COLORS = {
 export default function ProjectDirectory({ refreshKey }) {
   const [projects, setProjects] = useState([]);
   const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
   const [showArchived, setShowArchived] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ name: '', short_code: '', context_notes: '' });
 
   useEffect(() => { api.listProjects(showArchived).then(setProjects).catch(console.error); }, [refreshKey, showArchived]);
 
-  const filtered = projects.filter(p =>
-    p.name.toLowerCase().includes(search.toLowerCase()) ||
-    (p.short_code || '').toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = projects.filter(p => {
+    const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase()) ||
+      (p.short_code || '').toLowerCase().includes(search.toLowerCase());
+    const matchesStatus = statusFilter === 'all' || p.status === statusFilter;
+    return matchesSearch && matchesStatus;
+  });
 
   const handleCreate = async (e) => {
     e.preventDefault();
@@ -64,6 +67,14 @@ export default function ProjectDirectory({ refreshKey }) {
           <input type="text" placeholder="Search projects..." value={search} onChange={e => setSearch(e.target.value)}
             className="w-full glass-input rounded-lg pl-8 pr-3 py-2 text-sm text-zinc-300 outline-none" />
         </div>
+        <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
+          className="glass-input rounded px-2 py-1.5 text-xs text-zinc-400 outline-none">
+          <option value="all">All Status</option>
+          <option value="active">Active</option>
+          <option value="on_hold">On Hold</option>
+          <option value="complete">Complete</option>
+          <option value="cancelled">Cancelled</option>
+        </select>
         <label className="flex items-center gap-1.5 text-xs text-zinc-600 cursor-pointer whitespace-nowrap">
           <input type="checkbox" checked={showArchived} onChange={e => setShowArchived(e.target.checked)} className="rounded" />
           <Archive size={12} /> Archived
