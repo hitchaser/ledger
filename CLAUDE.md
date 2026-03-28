@@ -6,7 +6,7 @@ Ledger is a personal productivity web app for a leader managing staff. It runs o
 ## Tech Stack
 - **Backend:** Python 3.12 / FastAPI / SQLAlchemy / PostgreSQL
 - **Frontend:** React 18 + Vite + Tailwind CSS
-- **AI:** Ollama (local, Qwen2.5 14B) via REST API — graceful degradation if offline
+- **AI:** Ollama (Qwen3-Coder 30B on 192.168.1.200) via REST API — graceful degradation if offline
 - **Deploy:** Docker container via Olympus Sandbox API → https://ledger.hitchaser.com
 
 ## Database
@@ -98,8 +98,8 @@ frontend/
 
 ## Environment Variables
 - DATABASE_URL — PostgreSQL connection string
-- OLLAMA_BASE_URL — Ollama API (default: http://host.docker.internal:11434)
-- OLLAMA_MODEL — Model name (default: qwen2.5:14b)
+- OLLAMA_BASE_URL — Ollama API (default: http://192.168.1.200:11434)
+- OLLAMA_MODEL — Model name (default: qwen3-coder:30b)
 - AI_CONFIDENCE_AUTO_RESOLVE — Auto-resolve threshold (default: 0.85)
 - AI_CONFIDENCE_SUGGEST — Suggestion threshold (default: 0.60)
 

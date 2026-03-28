@@ -6,8 +6,8 @@ from typing import Optional, List
 
 logger = logging.getLogger("ledger.ai")
 
-OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://host.docker.internal:11434")
-OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "qwen2.5:14b")
+OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://192.168.1.200:11434")
+OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "qwen3-coder:30b")
 AI_CONFIDENCE_AUTO_RESOLVE = float(os.environ.get("AI_CONFIDENCE_AUTO_RESOLVE", "0.85"))
 AI_CONFIDENCE_SUGGEST = float(os.environ.get("AI_CONFIDENCE_SUGGEST", "0.60"))
 
