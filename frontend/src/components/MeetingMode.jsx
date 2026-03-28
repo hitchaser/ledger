@@ -79,12 +79,19 @@ export default function MeetingMode({ refreshKey, onRefresh }) {
 
   const addContextNote = async () => {
     if (!addNote.trim()) return;
-    const date = new Date().toISOString().split('T')[0];
-    const updated = (notes ? notes + '\n' : '') + `[${date}] ${addNote.trim()}`;
-    if (isPerson) await api.updatePerson(id, { context_notes: updated });
-    else await api.updateProject(id, { context_notes: updated });
-    setNotes(updated);
+    if (isPerson && entity.profile) {
+      const profile = { ...entity.profile };
+      const existing = profile.general || '';
+      profile.general = (existing ? existing + '\n' : '') + addNote.trim();
+      await api.updatePerson(id, { profile });
+    } else {
+      const updated = (notes ? notes + '\n' : '') + addNote.trim();
+      if (isPerson) await api.updatePerson(id, { context_notes: updated });
+      else await api.updateProject(id, { context_notes: updated });
+      setNotes(updated);
+    }
     setAddNote('');
+    loadData();
   };
 
   if (!entity) return <div className="p-8 text-zinc-600">Loading meeting...</div>;
@@ -178,8 +185,9 @@ export default function MeetingMode({ refreshKey, onRefresh }) {
         )}
 
         <div className="mb-4">
+          <h4 className="text-xs text-zinc-600 font-medium uppercase tracking-wide mb-1">Quick Note → General Notes</h4>
           <div className="flex gap-2">
-            <input placeholder="Add note..." value={addNote} onChange={e => setAddNote(e.target.value)}
+            <input placeholder="Add to general notes..." value={addNote} onChange={e => setAddNote(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && addContextNote()}
               className="flex-1 glass-input rounded px-2 py-1 text-xs text-zinc-300 outline-none" />
           </div>
