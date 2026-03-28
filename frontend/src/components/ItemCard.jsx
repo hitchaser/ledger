@@ -31,11 +31,12 @@ function timeAgo(dateStr) {
   return `${days}d ago`;
 }
 
-export default function ItemCard({ item, onUpdate, compact = false }) {
+export default function ItemCard({ item, onUpdate, compact = false, readonly = false }) {
   const [expanded, setExpanded] = useState(false);
   const type = item.effective_type;
   const urgency = item.effective_urgency;
   const isProcessing = !item.ai_processed_at && !item.manual_type;
+  const isDone = item.status === 'done';
   const displayText = (!expanded && item.raw_text.length > 120) ? item.raw_text.slice(0, 120) + '...' : item.raw_text;
 
   const markDone = async () => {
@@ -43,19 +44,26 @@ export default function ItemCard({ item, onUpdate, compact = false }) {
     onUpdate?.();
   };
 
-  const dismiss = async () => {
-    await api.updateCapture(item.id, { status: 'dismissed' });
+  const deleteItem = async () => {
+    await api.deleteCapture(item.id);
     onUpdate?.();
   };
 
   return (
     <div className={`group glass glass-hover rounded-lg ${compact ? 'px-3 py-2' : 'px-4 py-3'} transition-all`}>
       <div className="flex items-start gap-3">
-        <button onClick={markDone} className="mt-0.5 flex-shrink-0 w-5 h-5 rounded border border-white/10 hover:border-blue-400/50 hover:bg-blue-500/10 flex items-center justify-center transition-all">
-          <Check size={12} className="text-zinc-700 group-hover:text-blue-400" />
-        </button>
+        {!readonly && !isDone && (
+          <button onClick={markDone} className="mt-0.5 flex-shrink-0 w-5 h-5 rounded border border-white/10 hover:border-blue-400/50 hover:bg-blue-500/10 flex items-center justify-center transition-all">
+            <Check size={12} className="opacity-0 group-hover:opacity-100 text-blue-400 transition-opacity" />
+          </button>
+        )}
+        {isDone && (
+          <div className="mt-0.5 flex-shrink-0 w-5 h-5 rounded border border-blue-500/30 bg-blue-500/10 flex items-center justify-center">
+            <Check size={12} className="text-blue-400" />
+          </div>
+        )}
         <div className="flex-1 min-w-0">
-          <p className="text-sm text-zinc-300 leading-relaxed">
+          <p className={`text-sm leading-relaxed ${isDone ? 'text-zinc-500 line-through' : 'text-zinc-300'}`}>
             {displayText}
             {item.raw_text.length > 120 && (
               <button onClick={() => setExpanded(!expanded)} className="ml-1 text-zinc-600 hover:text-zinc-400">
@@ -80,9 +88,11 @@ export default function ItemCard({ item, onUpdate, compact = false }) {
             <span className="text-xs text-zinc-700 ml-auto">{timeAgo(item.created_at)}</span>
           </div>
         </div>
-        <button onClick={dismiss} className="opacity-0 group-hover:opacity-100 mt-0.5 p-1 text-zinc-700 hover:text-zinc-400 transition-all" title="Dismiss">
-          <X size={14} />
-        </button>
+        {!readonly && (
+          <button onClick={deleteItem} className="opacity-0 group-hover:opacity-100 mt-0.5 p-1 text-zinc-700 hover:text-rose-400 transition-all" title="Delete">
+            <X size={14} />
+          </button>
+        )}
       </div>
     </div>
   );

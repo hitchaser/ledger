@@ -9,6 +9,7 @@ export default function PersonProfile({ refreshKey, onRefresh }) {
   const navigate = useNavigate();
   const [person, setPerson] = useState(null);
   const [items, setItems] = useState([]);
+  const [completedItems, setCompletedItems] = useState([]);
   const [logs, setLogs] = useState([]);
   const [tab, setTab] = useState('items');
   const [editingNotes, setEditingNotes] = useState(false);
@@ -23,7 +24,8 @@ export default function PersonProfile({ refreshKey, onRefresh }) {
       setNotes(p.context_notes || '');
       setDetailsForm({ name: p.name, display_name: p.display_name, role: p.role || '', reporting_level: p.reporting_level, email: p.email || '' });
     });
-    api.getPersonItems(id).then(setItems);
+    api.getPersonItems(id, 'open').then(setItems);
+    api.getPersonItems(id, 'done').then(setCompletedItems);
     api.getPersonLogs(id).then(setLogs);
   }, [id, refreshKey]);
 
@@ -153,7 +155,11 @@ export default function PersonProfile({ refreshKey, onRefresh }) {
       <div className="flex gap-4 border-b border-white/[0.06] mb-3">
         <button onClick={() => setTab('items')}
           className={`pb-2 text-sm transition-colors ${tab === 'items' ? 'text-zinc-100 border-b-2 border-blue-500' : 'text-zinc-600 hover:text-zinc-300'}`}>
-          Open Items ({items.length})
+          Open ({items.length})
+        </button>
+        <button onClick={() => setTab('completed')}
+          className={`pb-2 text-sm transition-colors ${tab === 'completed' ? 'text-zinc-100 border-b-2 border-blue-500' : 'text-zinc-600 hover:text-zinc-300'}`}>
+          Completed ({completedItems.length})
         </button>
         <button onClick={() => setTab('history')}
           className={`pb-2 text-sm transition-colors ${tab === 'history' ? 'text-zinc-100 border-b-2 border-blue-500' : 'text-zinc-600 hover:text-zinc-300'}`}>
@@ -165,6 +171,13 @@ export default function PersonProfile({ refreshKey, onRefresh }) {
         <div className="flex flex-col gap-2">
           {items.length === 0 && <div className="text-center text-zinc-700 py-8 text-sm">No open items</div>}
           {items.map(item => <ItemCard key={item.id} item={item} onUpdate={onRefresh} compact />)}
+        </div>
+      )}
+
+      {tab === 'completed' && (
+        <div className="flex flex-col gap-2">
+          {completedItems.length === 0 && <div className="text-center text-zinc-700 py-8 text-sm">No completed items</div>}
+          {completedItems.map(item => <ItemCard key={item.id} item={item} onUpdate={onRefresh} compact readonly />)}
         </div>
       )}
 
