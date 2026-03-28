@@ -7,9 +7,10 @@ router = APIRouter(prefix="/api/settings", tags=["settings"])
 
 DEFAULTS = {
     "ai_enabled": "true",
-    "ai_provider": "litellm",
+    "classification_provider": "litellm",
     "classification_model": "gemini/gemini-2.5-flash",
-    "profile_model": "gemini/gemini-2.5-flash",
+    "profile_provider": "ollama",
+    "profile_model": "qwen3-coder:30b",
     "ollama_base_url": "http://192.168.1.200:11434",
     "litellm_base_url": "http://192.168.1.100:4000",
     "litellm_api_key": "sk-olympus-litellm-master",

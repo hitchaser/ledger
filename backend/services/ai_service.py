@@ -39,9 +39,10 @@ def get_setting(key: str, default: str = "") -> str:
     settings = get_settings()
     defaults = {
         "ai_enabled": "true",
-        "ai_provider": "litellm",
+        "classification_provider": "litellm",
         "classification_model": "gemini/gemini-2.5-flash",
-        "profile_model": "gemini/gemini-2.5-flash",
+        "profile_provider": "ollama",
+        "profile_model": "qwen3-coder:30b",
         "ollama_base_url": "http://192.168.1.200:11434",
         "litellm_base_url": "http://192.168.1.100:4000",
         "litellm_api_key": "sk-olympus-litellm-master",
@@ -63,11 +64,13 @@ def get_confidence_suggest() -> float:
 
 def _call_ai(messages: list, model_key: str = "classification_model",
              format_json: bool = True) -> Optional[str]:
-    """Call AI provider based on settings. Returns raw content string."""
+    """Call AI provider based on per-model settings. Returns raw content string."""
     if get_setting("ai_enabled") != "true":
         return None
 
-    provider = get_setting("ai_provider", "litellm")
+    # Determine provider for this specific model
+    provider_key = model_key.replace("_model", "_provider")
+    provider = get_setting(provider_key, "litellm")
     model = get_setting(model_key)
 
     try:

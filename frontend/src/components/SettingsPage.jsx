@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { api } from '../api/client';
-import { Save, ChevronDown } from 'lucide-react';
+import { Save } from 'lucide-react';
 
 const MODEL_PRESETS = [
   { group: 'LiteLLM (Cloud)', provider: 'litellm', models: [
@@ -15,22 +15,30 @@ const MODEL_PRESETS = [
   ]},
 ];
 
-function ModelSelector({ value, onChange, onProviderChange, label, description }) {
+function ModelSelector({ modelValue, providerValue, onModelChange, onProviderChange, label, description }) {
   const [custom, setCustom] = useState(false);
 
-  // Check if current value matches a preset
-  const isPreset = MODEL_PRESETS.some(g => g.models.some(m => m.value === value));
+  const isPreset = MODEL_PRESETS.some(g => g.models.some(m => m.value === modelValue));
   const showCustom = custom || !isPreset;
 
-  const handlePresetSelect = (modelValue, provider) => {
-    onChange(modelValue);
-    if (onProviderChange) onProviderChange(provider);
+  const handlePresetSelect = (model, provider) => {
+    onModelChange(model);
+    onProviderChange(provider);
     setCustom(false);
   };
 
   return (
     <div>
-      <label className="text-xs text-zinc-500 mb-1 block">{label}</label>
+      <div className="flex items-center justify-between mb-1">
+        <label className="text-xs text-zinc-500">{label}</label>
+        <span className={`text-xs px-1.5 py-0.5 rounded ${
+          providerValue === 'litellm'
+            ? 'bg-blue-500/15 text-blue-400 border border-blue-500/20'
+            : 'bg-violet-500/15 text-violet-400 border border-violet-500/20'
+        }`}>
+          {providerValue === 'litellm' ? 'Cloud' : 'Local'}
+        </span>
+      </div>
       {!showCustom ? (
         <div>
           <div className="grid gap-1.5">
@@ -43,7 +51,7 @@ function ModelSelector({ value, onChange, onProviderChange, label, description }
                       key={m.value}
                       onClick={() => handlePresetSelect(m.value, group.provider)}
                       className={`px-2.5 py-1.5 rounded text-xs transition-all ${
-                        value === m.value
+                        modelValue === m.value
                           ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
                           : 'glass glass-hover text-zinc-400 hover:text-zinc-200'
                       }`}
@@ -61,10 +69,22 @@ function ModelSelector({ value, onChange, onProviderChange, label, description }
         </div>
       ) : (
         <div>
+          <div className="flex gap-2 mb-1.5">
+            {['litellm', 'ollama'].map(p => (
+              <button key={p} onClick={() => onProviderChange(p)}
+                className={`px-2 py-1 rounded text-xs transition-all ${
+                  providerValue === p
+                    ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                    : 'glass text-zinc-500 hover:text-zinc-300'
+                }`}>
+                {p === 'litellm' ? 'Cloud' : 'Local'}
+              </button>
+            ))}
+          </div>
           <div className="flex gap-2">
             <input
-              value={value}
-              onChange={e => onChange(e.target.value)}
+              value={modelValue}
+              onChange={e => onModelChange(e.target.value)}
               placeholder="model-name:tag"
               className="flex-1 glass-input rounded px-3 py-2 text-sm text-zinc-200 outline-none"
             />
@@ -96,6 +116,8 @@ export default function SettingsPage() {
       if (payload.litellm_api_key === '••••••••') {
         delete payload.litellm_api_key;
       }
+      // Clean up legacy global provider if present
+      delete payload.ai_provider;
       const updated = await api.updateSettings(payload);
       setSettings(updated);
       setSaved(true);
@@ -108,11 +130,8 @@ export default function SettingsPage() {
 
   if (!settings) return <div className="p-8 text-zinc-600">Loading settings...</div>;
 
-  const isLiteLLM = settings.ai_provider === 'litellm';
-
-  const setProvider = (provider) => {
-    setSettings({ ...settings, ai_provider: provider });
-  };
+  const showLiteLLMConfig = settings.classification_provider === 'litellm' || settings.profile_provider === 'litellm';
+  const showOllamaConfig = settings.classification_provider === 'ollama' || settings.profile_provider === 'ollama';
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-4">
@@ -135,76 +154,65 @@ export default function SettingsPage() {
             </button>
           </div>
 
-          {/* Provider */}
-          <div>
-            <label className="text-xs text-zinc-500 mb-1 block">Provider</label>
-            <div className="flex gap-2">
-              {[
-                { value: 'litellm', label: 'LiteLLM (Cloud)' },
-                { value: 'ollama', label: 'Ollama (Local)' },
-              ].map(o => (
-                <button
-                  key={o.value}
-                  onClick={() => setProvider(o.value)}
-                  className={`flex-1 px-3 py-2 rounded text-sm transition-all ${
-                    settings.ai_provider === o.value
-                      ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
-                      : 'glass text-zinc-500 hover:text-zinc-300'
-                  }`}
-                >
-                  {o.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Provider URL */}
-          <div>
-            <label className="text-xs text-zinc-500 mb-1 block">
-              {isLiteLLM ? 'LiteLLM Base URL' : 'Ollama Base URL'}
-            </label>
-            <input
-              value={isLiteLLM ? settings.litellm_base_url : settings.ollama_base_url}
-              onChange={e => setSettings({
-                ...settings,
-                [isLiteLLM ? 'litellm_base_url' : 'ollama_base_url']: e.target.value
-              })}
-              className="w-full glass-input rounded px-3 py-2 text-sm text-zinc-200 outline-none"
-            />
-          </div>
-
-          {/* API Key (LiteLLM only) */}
-          {isLiteLLM && (
-            <div>
-              <label className="text-xs text-zinc-500 mb-1 block">LiteLLM API Key</label>
-              <input
-                type="password"
-                value={settings.litellm_api_key || ''}
-                onChange={e => setSettings({ ...settings, litellm_api_key: e.target.value })}
-                placeholder="Enter new key to change"
-                className="w-full glass-input rounded px-3 py-2 text-sm text-zinc-200 outline-none"
-              />
-              <p className="text-xs text-zinc-600 mt-1">Leave as-is to keep current key. Clear and enter a new value to change.</p>
-            </div>
-          )}
-
           {/* Classification Model */}
           <ModelSelector
-            value={settings.classification_model}
-            onChange={v => setSettings({ ...settings, classification_model: v })}
-            onProviderChange={setProvider}
+            modelValue={settings.classification_model}
+            providerValue={settings.classification_provider || 'litellm'}
+            onModelChange={v => setSettings({ ...settings, classification_model: v })}
+            onProviderChange={v => setSettings({ ...settings, classification_provider: v })}
             label="Classification Model"
-            description="Used for classifying captures (type, urgency, linking)"
+            description="Classifies captures — type, urgency, people/project linking, resolution matching"
           />
 
           {/* Profile Model */}
           <ModelSelector
-            value={settings.profile_model}
-            onChange={v => setSettings({ ...settings, profile_model: v })}
-            onProviderChange={setProvider}
+            modelValue={settings.profile_model}
+            providerValue={settings.profile_provider || 'ollama'}
+            onModelChange={v => setSettings({ ...settings, profile_model: v })}
+            onProviderChange={v => setSettings({ ...settings, profile_provider: v })}
             label="Profile Parsing Model"
-            description="Used for extracting profile fields from captures"
+            description="Extracts structured profile fields from captures (e.g. 'daughter named Susan' → Children)"
           />
+        </div>
+      </div>
+
+      {/* Provider URLs */}
+      <div className="glass rounded-lg p-4 mb-4">
+        <h3 className="text-sm font-medium text-zinc-300 mb-3">Provider Configuration</h3>
+        <div className="space-y-3">
+          {showLiteLLMConfig && (
+            <>
+              <div>
+                <label className="text-xs text-zinc-500 mb-1 block">LiteLLM Base URL</label>
+                <input
+                  value={settings.litellm_base_url}
+                  onChange={e => setSettings({ ...settings, litellm_base_url: e.target.value })}
+                  className="w-full glass-input rounded px-3 py-2 text-sm text-zinc-200 outline-none"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-zinc-500 mb-1 block">LiteLLM API Key</label>
+                <input
+                  type="password"
+                  value={settings.litellm_api_key || ''}
+                  onChange={e => setSettings({ ...settings, litellm_api_key: e.target.value })}
+                  placeholder="Enter new key to change"
+                  className="w-full glass-input rounded px-3 py-2 text-sm text-zinc-200 outline-none"
+                />
+                <p className="text-xs text-zinc-600 mt-1">Leave as-is to keep current key</p>
+              </div>
+            </>
+          )}
+          {showOllamaConfig && (
+            <div>
+              <label className="text-xs text-zinc-500 mb-1 block">Ollama Base URL</label>
+              <input
+                value={settings.ollama_base_url}
+                onChange={e => setSettings({ ...settings, ollama_base_url: e.target.value })}
+                className="w-full glass-input rounded px-3 py-2 text-sm text-zinc-200 outline-none"
+              />
+            </div>
+          )}
         </div>
       </div>
 
