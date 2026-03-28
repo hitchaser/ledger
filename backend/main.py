@@ -166,10 +166,32 @@ async def ai_worker():
                     candidates = result.get("resolution_candidates", [])
                     confidence = result.get("confidence", 0.0)
                     if candidates and confidence >= AI_CONFIDENCE_SUGGEST:
+                        resolved_items = []
+                        if confidence >= AI_CONFIDENCE_AUTO_RESOLVE:
+                            # Actually resolve the candidate items
+                            for cid in candidates:
+                                try:
+                                    from uuid import UUID as parse_uuid
+                                    candidate_uuid = parse_uuid(str(cid))
+                                    candidate = db.query(CaptureItem).filter(
+                                        CaptureItem.id == candidate_uuid,
+                                        CaptureItem.status == "open",
+                                    ).first()
+                                    if candidate:
+                                        candidate.status = "done"
+                                        candidate.resolved_at = datetime.now(timezone.utc)
+                                        candidate.resolution_note = f"Auto-resolved by: {item.raw_text[:100]}"
+                                        resolved_items.append(str(candidate.id))
+                                except (ValueError, Exception) as e:
+                                    logger.warning(f"Failed to resolve candidate {cid}: {e}")
+                            if resolved_items:
+                                db.commit()
+
                         await manager.broadcast({
                             "type": "resolution_suggestion",
                             "new_item_id": str(item.id),
                             "candidate_ids": candidates,
+                            "resolved_ids": resolved_items,
                             "confidence": confidence,
                             "auto_resolve": confidence >= AI_CONFIDENCE_AUTO_RESOLVE,
                         })
