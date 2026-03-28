@@ -59,7 +59,7 @@ export default function Sidebar({ collapsed, onToggle, onLogout }) {
       {/* Mobile hamburger button */}
       <button
         onClick={() => setMobileOpen(true)}
-        className="md:hidden fixed top-3 left-3 z-50 p-2 rounded-lg bg-zinc-900/90 border border-white/[0.06] text-zinc-400 hover:text-zinc-200 transition-colors"
+        className="md:hidden fixed top-3 left-3 z-50 p-2 rounded-lg glass text-zinc-400 hover:text-zinc-200 transition-colors"
       >
         <Menu size={20} />
       </button>
@@ -67,8 +67,8 @@ export default function Sidebar({ collapsed, onToggle, onLogout }) {
       {/* Mobile overlay */}
       {mobileOpen && (
         <div className="md:hidden fixed inset-0 z-50">
-          <div className="absolute inset-0 bg-black/60" onClick={() => setMobileOpen(false)} />
-          <aside className="absolute left-0 top-0 bottom-0 w-56 flex flex-col bg-zinc-950/95 backdrop-blur-xl border-r border-white/[0.06]">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setMobileOpen(false)} />
+          <aside className="absolute left-0 top-0 bottom-0 w-56 flex flex-col glass backdrop-blur-xl" style={{ borderRadius: 0 }}>
             <div className="flex items-center justify-between p-3">
               <span className="text-sm font-semibold text-zinc-300">Ledger</span>
               <button onClick={() => setMobileOpen(false)} className="text-zinc-500 hover:text-zinc-300">
