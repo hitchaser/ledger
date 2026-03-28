@@ -12,7 +12,7 @@ from starlette.responses import FileResponse, JSONResponse
 
 from database import engine, SessionLocal, Base
 from models import AIJob, CaptureItem, Person, Project, CaptureItemPerson, CaptureItemProject, LinkSource
-from services.ai_service import classify_capture, AI_CONFIDENCE_AUTO_RESOLVE, AI_CONFIDENCE_SUGGEST
+from services.ai_service import classify_capture, get_confidence_auto_resolve, get_confidence_suggest
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("ledger")
@@ -234,9 +234,9 @@ async def ai_worker():
 
                     candidates = result.get("resolution_candidates", [])
                     confidence = result.get("confidence", 0.0)
-                    if candidates and confidence >= AI_CONFIDENCE_SUGGEST:
+                    if candidates and confidence >= get_confidence_suggest():
                         resolved_items = []
-                        if confidence >= AI_CONFIDENCE_AUTO_RESOLVE:
+                        if confidence >= get_confidence_auto_resolve():
                             # Actually resolve the candidate items
                             for cid in candidates:
                                 try:
@@ -262,7 +262,7 @@ async def ai_worker():
                             "candidate_ids": candidates,
                             "resolved_ids": resolved_items,
                             "confidence": confidence,
-                            "auto_resolve": confidence >= AI_CONFIDENCE_AUTO_RESOLVE,
+                            "auto_resolve": confidence >= get_confidence_auto_resolve(),
                         })
 
                 else:
@@ -354,6 +354,7 @@ from routers.people import router as people_router
 from routers.projects import router as projects_router
 from routers.meetings import router as meetings_router
 from routers.digest import router as digest_router
+from routers.settings import router as settings_router
 
 app.include_router(auth_router)
 app.include_router(captures_router)
@@ -361,6 +362,7 @@ app.include_router(people_router)
 app.include_router(projects_router)
 app.include_router(meetings_router)
 app.include_router(digest_router)
+app.include_router(settings_router)
 
 
 # ── WebSocket (auth-protected) ──

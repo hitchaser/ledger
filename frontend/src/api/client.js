@@ -63,4 +63,8 @@ export const api = {
 
   // Digest
   getDigest: () => request('/digest'),
+
+  // Settings
+  getSettings: () => request('/settings'),
+  updateSettings: (data) => request('/settings', { method: 'PUT', body: JSON.stringify(data) }),
 };

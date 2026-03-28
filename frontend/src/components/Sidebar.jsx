@@ -1,11 +1,12 @@
 import { NavLink } from 'react-router-dom';
-import { LayoutList, Users, FolderKanban, CalendarDays, PanelLeftClose, PanelLeft, LogOut } from 'lucide-react';
+import { LayoutList, Users, FolderKanban, CalendarDays, Settings, PanelLeftClose, PanelLeft, LogOut } from 'lucide-react';
 
 const links = [
   { to: '/', icon: LayoutList, label: 'Feed' },
   { to: '/people', icon: Users, label: 'People' },
   { to: '/projects', icon: FolderKanban, label: 'Projects' },
   { to: '/digest', icon: CalendarDays, label: 'Digest' },
+  { to: '/settings', icon: Settings, label: 'Settings' },
 ];
 
 export default function Sidebar({ collapsed, onToggle, onLogout }) {

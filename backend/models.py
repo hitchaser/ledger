@@ -189,6 +189,12 @@ class ProfileLog(Base):
     project = relationship("Project", back_populates="profile_logs", foreign_keys=[project_id])
 
 
+class Setting(Base):
+    __tablename__ = "settings"
+    key = Column(String, primary_key=True)
+    value = Column(Text, nullable=False)
+
+
 class AIJob(Base):
     __tablename__ = "ai_jobs"
 
