@@ -5,7 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Ledger</title>
 </head>
-<body class="bg-zinc-950 text-zinc-100">
+<body>
+  <script>document.body.className = localStorage.getItem('ledger_theme') || 'dark';</script>
   <div id="root"></div>
   <script type="module" src="/src/main.jsx"></script>
 </body>

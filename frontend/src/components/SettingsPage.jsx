@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { api } from '../api/client';
-import { Save } from 'lucide-react';
+import { Save, Sun, Moon } from 'lucide-react';
 
 const MODEL_PRESETS = [
   { group: 'LiteLLM (Cloud)', provider: 'litellm', models: [
@@ -99,7 +99,7 @@ function ModelSelector({ modelValue, providerValue, onModelChange, onProviderCha
   );
 }
 
-export default function SettingsPage() {
+export default function SettingsPage({ theme, onToggleTheme }) {
   const [settings, setSettings] = useState(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -136,6 +136,25 @@ export default function SettingsPage() {
   return (
     <div className="max-w-2xl mx-auto px-4 py-4">
       <h2 className="text-lg font-semibold text-zinc-200 mb-4">Settings</h2>
+
+      {/* Appearance */}
+      <div className="glass rounded-lg p-4 mb-4">
+        <h3 className="text-sm font-medium text-zinc-300 mb-3">Appearance</h3>
+        <div className="flex items-center justify-between">
+          <label className="text-sm text-zinc-400">Theme</label>
+          <div className="flex items-center gap-2">
+            <Sun size={14} className={theme === 'light' ? 'text-amber-400' : 'text-zinc-600'} />
+            <button
+              onClick={onToggleTheme}
+              className={`w-10 h-5 rounded-full transition-colors relative ${theme === 'dark' ? 'bg-blue-600' : 'bg-zinc-300'}`}
+            >
+              <div className="w-4 h-4 rounded-full bg-white absolute top-0.5 transition-all"
+                style={{ left: theme === 'dark' ? '22px' : '2px' }} />
+            </button>
+            <Moon size={14} className={theme === 'dark' ? 'text-blue-400' : 'text-zinc-400'} />
+          </div>
+        </div>
+      </div>
 
       {/* AI Configuration */}
       <div className="glass rounded-lg p-4 mb-4">

@@ -5,34 +5,88 @@
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Roboto, sans-serif;
   min-height: 100vh;
-  background: #09090b;
+  transition: background-color 0.2s, color 0.2s;
 }
 
-::-webkit-scrollbar { width: 5px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.14); }
+/* ── Dark Mode (default) ── */
+body.dark {
+  background: #09090b;
+  color: #e4e4e7;
+}
 
-.badge { @apply px-1.5 py-0.5 rounded text-xs font-medium; }
+body.dark ::-webkit-scrollbar { width: 5px; }
+body.dark ::-webkit-scrollbar-track { background: transparent; }
+body.dark ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 3px; }
+body.dark ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.14); }
 
-.glass {
+body.dark .glass {
   background: rgba(255, 255, 255, 0.03);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border: 1px solid rgba(255, 255, 255, 0.06);
 }
-
-.glass-hover:hover {
+body.dark .glass-hover:hover {
   background: rgba(255, 255, 255, 0.06);
   border-color: rgba(255, 255, 255, 0.1);
 }
-
-.glass-input {
+body.dark .glass-input {
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
-
-.glass-input:focus {
+body.dark .glass-input:focus {
   border-color: rgba(96, 165, 250, 0.5);
   box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.1);
 }
+
+/* ── Light Mode ── */
+body.light {
+  background: #f4f4f5;
+  color: #18181b;
+}
+
+body.light ::-webkit-scrollbar { width: 5px; }
+body.light ::-webkit-scrollbar-track { background: transparent; }
+body.light ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 3px; }
+body.light ::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.25); }
+
+body.light .glass {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
+body.light .glass-hover:hover {
+  background: rgba(255, 255, 255, 0.85);
+  border-color: rgba(0, 0, 0, 0.12);
+}
+body.light .glass-input {
+  background: rgba(255, 255, 255, 0.8);
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  color: #18181b;
+}
+body.light .glass-input:focus {
+  border-color: rgba(59, 130, 246, 0.5);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+}
+
+/* Light mode color overrides */
+body.light .bg-black\/30 { background: rgba(255,255,255,0.6) !important; }
+body.light .bg-black\/40 { background: rgba(255,255,255,0.7) !important; }
+body.light .bg-black\/20 { background: rgba(255,255,255,0.5) !important; }
+body.light .bg-zinc-950 { background: #f4f4f5 !important; }
+body.light .bg-zinc-900\/95 { background: rgba(255,255,255,0.97) !important; }
+body.light .text-zinc-100 { color: #18181b !important; }
+body.light .text-zinc-200 { color: #27272a !important; }
+body.light .text-zinc-300 { color: #3f3f46 !important; }
+body.light .text-zinc-400 { color: #52525b !important; }
+body.light .text-zinc-500 { color: #71717a !important; }
+body.light .text-zinc-600 { color: #a1a1aa !important; }
+body.light .text-zinc-700 { color: #d4d4d8 !important; }
+body.light .border-white\/\[0\.06\] { border-color: rgba(0,0,0,0.08) !important; }
+body.light .border-white\/10 { border-color: rgba(0,0,0,0.1) !important; }
+body.light .border-white\/\[0\.08\] { border-color: rgba(0,0,0,0.1) !important; }
+body.light .border-white\/\[0\.04\] { border-color: rgba(0,0,0,0.06) !important; }
+body.light .placeholder-zinc-600::placeholder { color: #a1a1aa !important; }
+body.light select option { background: white; color: #18181b; }
+
+.badge { @apply px-1.5 py-0.5 rounded text-xs font-medium; }

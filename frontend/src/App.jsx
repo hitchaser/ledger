@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import { useWebSocket } from './hooks/useWebSocket';
+import { useTheme } from './hooks/useTheme';
 import Login from './components/Login';
 import Sidebar from './components/Sidebar';
 import CaptureBox from './components/CaptureBox';
@@ -16,6 +17,7 @@ import QuickSearch from './components/QuickSearch';
 import Toast from './components/Toast';
 
 export default function App() {
+  const { theme, toggleTheme } = useTheme();
   const [authenticated, setAuthenticated] = useState(null); // null=checking
   const [refreshKey, setRefreshKey] = useState(0);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -111,7 +113,7 @@ export default function App() {
             <Route path="/projects/:id" element={<ProjectCard refreshKey={refreshKey} onRefresh={refresh} />} />
             <Route path="/meeting/:type/:id" element={<MeetingMode refreshKey={refreshKey} onRefresh={refresh} />} />
             <Route path="/digest" element={<DailyDigest />} />
-            <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/settings" element={<SettingsPage theme={theme} onToggleTheme={toggleTheme} />} />
           </Routes>
         </main>
       </div>
