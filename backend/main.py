@@ -152,6 +152,32 @@ async def ai_worker():
                     if result.get("item_type") == "profile_update":
                         item.status = "done"
                         item.resolved_at = datetime.now(timezone.utc)
+                        # Append to linked person/project context_notes
+                        date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+                        note_entry = f"[{date_str}] {item.raw_text}"
+                        from models import ProfileLog, LogType
+                        for person in (db.query(Person).filter(
+                            Person.id.in_(linked_people_ids)
+                        ).all() if linked_people_ids else []):
+                            person.context_notes = (
+                                (person.context_notes + "\n" if person.context_notes else "") + note_entry
+                            )
+                            db.add(ProfileLog(
+                                log_type=LogType.profile_update,
+                                content=note_entry,
+                                person_id=person.id,
+                            ))
+                        for proj in (db.query(Project).filter(
+                            Project.id.in_(linked_project_ids)
+                        ).all() if linked_project_ids else []):
+                            proj.context_notes = (
+                                (proj.context_notes + "\n" if proj.context_notes else "") + note_entry
+                            )
+                            db.add(ProfileLog(
+                                log_type=LogType.profile_update,
+                                content=note_entry,
+                                project_id=proj.id,
+                            ))
 
                     job.status = "done"
                     db.commit()
