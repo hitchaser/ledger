@@ -5,6 +5,8 @@ export function useWebSocket(onMessage) {
   const reconnectTimer = useRef(null);
 
   const connect = useCallback(() => {
+    if (!onMessage) return; // Don't connect if no handler (not authenticated)
+
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
 
@@ -15,7 +17,11 @@ export function useWebSocket(onMessage) {
         onMessage(data);
       } catch {}
     };
-    ws.onclose = () => {
+    ws.onclose = (e) => {
+      if (e.code === 4001) {
+        console.log('[WS] auth rejected');
+        return;
+      }
       console.log('[WS] disconnected, reconnecting...');
       reconnectTimer.current = setTimeout(connect, 3000);
     };

@@ -6,9 +6,9 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import List
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
 from fastapi.staticfiles import StaticFiles
-from starlette.responses import FileResponse
+from starlette.responses import FileResponse, JSONResponse
 
 from database import engine, SessionLocal, Base
 from models import AIJob, CaptureItem, Person, Project, CaptureItemPerson, CaptureItemProject, LinkSource
@@ -32,7 +32,8 @@ class ConnectionManager:
         self.connections.append(ws)
 
     def disconnect(self, ws: WebSocket):
-        self.connections.remove(ws)
+        if ws in self.connections:
+            self.connections.remove(ws)
 
     async def broadcast(self, message: dict):
         for ws in self.connections[:]:
@@ -63,13 +64,11 @@ async def ai_worker():
                     db.close()
                     continue
 
-                # Get context
                 people = db.query(Person).filter(Person.is_archived == False).all()
                 projects = db.query(Project).filter(Project.is_archived == False).all()
                 people_names = [p.display_name for p in people]
                 project_names = [f"{p.name}" + (f" ({p.short_code})" if p.short_code else "") for p in projects]
 
-                # Get open items for resolution matching
                 open_items = db.query(CaptureItem).filter(
                     CaptureItem.status == "open",
                     CaptureItem.id != item.id,
@@ -86,7 +85,6 @@ async def ai_worker():
                     item.ai_confidence = result.get("confidence", 0.0)
                     item.ai_processed_at = datetime.now(timezone.utc)
 
-                    # Link people
                     for name in result.get("linked_people", []):
                         person = db.query(Person).filter(
                             Person.display_name.ilike(name),
@@ -102,7 +100,6 @@ async def ai_worker():
                                     link_source=LinkSource.ai
                                 ))
 
-                    # Link projects
                     for name in result.get("linked_projects", []):
                         project = db.query(Project).filter(
                             Project.is_archived == False,
@@ -123,7 +120,6 @@ async def ai_worker():
                                     link_source=LinkSource.ai
                                 ))
 
-                    # Handle profile updates
                     if result.get("item_type") == "profile_update":
                         item.status = "done"
                         item.resolved_at = datetime.now(timezone.utc)
@@ -131,7 +127,6 @@ async def ai_worker():
                     job.status = "done"
                     db.commit()
 
-                    # Broadcast update via WebSocket
                     from routers.captures import item_to_response
                     db.refresh(item)
                     await manager.broadcast({
@@ -139,7 +134,6 @@ async def ai_worker():
                         "item": json.loads(json.dumps(item_to_response(item), default=str)),
                     })
 
-                    # Handle resolution candidates
                     candidates = result.get("resolution_candidates", [])
                     confidence = result.get("confidence", 0.0)
                     if candidates and confidence >= AI_CONFIDENCE_SUGGEST:
@@ -173,13 +167,41 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Ledger", lifespan=lifespan)
 
-# Include routers
+
+# ── Auth Middleware ──
+
+@app.middleware("http")
+async def auth_middleware(request: Request, call_next):
+    path = request.url.path
+
+    # Allow: auth endpoints, health check, static assets, SPA shell
+    if (path.startswith("/api/auth/")
+        or path == "/api/health"
+        or not path.startswith("/api/")):
+        return await call_next(request)
+
+    from routers.auth import verify_token, COOKIE_NAME
+    token = request.cookies.get(COOKIE_NAME)
+    if not token:
+        return JSONResponse(status_code=401, content={"detail": "Not authenticated"})
+    try:
+        verify_token(token)
+    except Exception:
+        return JSONResponse(status_code=401, content={"detail": "Invalid or expired session"})
+
+    return await call_next(request)
+
+
+# ── Include routers ──
+
+from routers.auth import router as auth_router
 from routers.captures import router as captures_router
 from routers.people import router as people_router
 from routers.projects import router as projects_router
 from routers.meetings import router as meetings_router
 from routers.digest import router as digest_router
 
+app.include_router(auth_router)
 app.include_router(captures_router)
 app.include_router(people_router)
 app.include_router(projects_router)
@@ -187,8 +209,21 @@ app.include_router(meetings_router)
 app.include_router(digest_router)
 
 
+# ── WebSocket (auth-protected) ──
+
 @app.websocket("/ws")
 async def websocket_endpoint(ws: WebSocket):
+    from routers.auth import verify_token, COOKIE_NAME
+    token = ws.cookies.get(COOKIE_NAME)
+    if not token:
+        await ws.close(code=4001)
+        return
+    try:
+        verify_token(token)
+    except Exception:
+        await ws.close(code=4001)
+        return
+
     await manager.connect(ws)
     try:
         while True:

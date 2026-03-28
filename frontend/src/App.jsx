@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import { useWebSocket } from './hooks/useWebSocket';
+import Login from './components/Login';
 import Sidebar from './components/Sidebar';
 import CaptureBox from './components/CaptureBox';
 import Feed from './components/Feed';
@@ -14,6 +15,7 @@ import QuickSearch from './components/QuickSearch';
 import Toast from './components/Toast';
 
 export default function App() {
+  const [authenticated, setAuthenticated] = useState(null); // null=checking
   const [refreshKey, setRefreshKey] = useState(0);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
@@ -22,55 +24,67 @@ export default function App() {
   const navigate = useNavigate();
   const location = useLocation();
 
+  // Check auth on mount
+  useEffect(() => {
+    fetch('/api/auth/me')
+      .then(r => setAuthenticated(r.ok))
+      .catch(() => setAuthenticated(false));
+  }, []);
+
   const refresh = useCallback(() => setRefreshKey(k => k + 1), []);
 
   const handleWsMessage = useCallback((data) => {
-    if (data.type === 'item_updated') {
+    if (data.type === 'item_updated') refresh();
+    if (data.type === 'resolution_suggestion' && data.auto_resolve) {
+      setToast({ message: 'An item was auto-resolved', type: 'info' });
       refresh();
-    }
-    if (data.type === 'resolution_suggestion') {
-      if (data.auto_resolve) {
-        setToast({ message: 'An item was auto-resolved', type: 'info', undoAction: null });
-        refresh();
-      }
     }
   }, [refresh]);
 
-  useWebSocket(handleWsMessage);
+  useWebSocket(authenticated ? handleWsMessage : null);
 
   // Keyboard shortcuts
   useEffect(() => {
+    if (!authenticated) return;
     const handler = (e) => {
       if (e.key === '/' && !e.ctrlKey && !e.metaKey && document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA') {
         e.preventDefault();
         document.getElementById('capture-input')?.focus();
       }
-      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
-        e.preventDefault();
-        setShowSearch(s => !s);
-      }
-      if ((e.ctrlKey || e.metaKey) && e.key === 'm') {
-        e.preventDefault();
-        navigate('/people');
-      }
-      if ((e.ctrlKey || e.metaKey) && e.key === 'p') {
-        e.preventDefault();
-        navigate('/projects');
-      }
-      if (e.key === 'Escape') {
-        setShowSearch(false);
-      }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') { e.preventDefault(); setShowSearch(s => !s); }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'm') { e.preventDefault(); navigate('/people'); }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'p') { e.preventDefault(); navigate('/projects'); }
+      if (e.key === 'Escape') setShowSearch(false);
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [navigate]);
+  }, [navigate, authenticated]);
+
+  const handleLogout = async () => {
+    await fetch('/api/auth/logout', { method: 'POST' });
+    setAuthenticated(false);
+  };
+
+  // Loading state
+  if (authenticated === null) {
+    return (
+      <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
+        <div className="text-zinc-600 text-sm">Loading...</div>
+      </div>
+    );
+  }
+
+  // Not authenticated
+  if (!authenticated) {
+    return <Login onLogin={() => setAuthenticated(true)} />;
+  }
 
   const isMeeting = location.pathname.startsWith('/meeting');
 
   return (
     <div className="flex h-screen overflow-hidden">
       {!isMeeting && (
-        <Sidebar collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed(!sidebarCollapsed)} />
+        <Sidebar collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed(!sidebarCollapsed)} onLogout={handleLogout} />
       )}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <CaptureBox onCapture={refresh} />

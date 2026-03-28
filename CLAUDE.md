@@ -7,6 +7,7 @@ Ledger is a personal productivity web app for a leader managing staff. It runs o
 - **Backend:** Python 3.12 / FastAPI / SQLAlchemy / PostgreSQL
 - **Frontend:** React 18 + Vite + Tailwind CSS
 - **AI:** Ollama (Qwen3-Coder 30B on 192.168.1.200) via REST API — graceful degradation if offline
+- **Auth:** JWT session cookies (PyJWT), single-user, 24h sessions
 - **Deploy:** Docker container via Olympus Sandbox API → https://ledger.hitchaser.com
 
 ## Database
@@ -32,8 +33,23 @@ Ledger is a personal productivity web app for a leader managing staff. It runs o
 - LinkSource: ai, manual, hashtag
 - LogType: meeting_summary, profile_update, manual_note
 
+## Authentication
+- **Method:** JWT token in httpOnly secure cookie (`ledger_session`)
+- **Session duration:** 24 hours (configurable via SESSION_DURATION_HOURS env var)
+- **Protected:** All /api/ endpoints except /api/auth/login and /api/health
+- **WebSocket:** Also requires valid session cookie
+- **Login page:** Obsidian/glass themed, shown automatically when unauthenticated
+- **Logout:** Sign Out button in sidebar, clears cookie
+- **Frontend 401 handling:** Auto-reloads to trigger login screen on expired sessions
+- **Env vars:** LEDGER_USERNAME, LEDGER_PASSWORD, APP_SECRET_KEY, SESSION_DURATION_HOURS
+
+### Auth Endpoints
+- **POST /api/auth/login** — authenticate, sets session cookie
+- **POST /api/auth/logout** — clears session cookie
+- **GET /api/auth/me** — returns current user if authenticated
+
 ## API Endpoints
-All under /api/:
+All under /api/ (require authentication):
 - **POST/GET /captures** — create/list captures (filters: status, type, urgency, person_id, project_id, search)
 - **PATCH /captures/:id** — update status, manual type/urgency, resolution note
 - **POST/DELETE /captures/:id/link-person/:pid** — manage person links

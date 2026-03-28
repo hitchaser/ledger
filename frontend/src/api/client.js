@@ -5,6 +5,11 @@ async function request(path, options = {}) {
     headers: { 'Content-Type': 'application/json', ...options.headers },
     ...options,
   });
+  if (res.status === 401) {
+    // Session expired or invalid — reload to trigger auth check
+    window.location.reload();
+    throw new Error('Session expired');
+  }
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`${res.status}: ${text}`);
