@@ -32,6 +32,15 @@ export default function MeetingMode({ refreshKey, onRefresh }) {
   useEffect(() => {
     loadData();
     api.getActiveMeeting().then(s => { if (s) setSession(s); });
+
+    // Auto-end session if user navigates away without clicking End Meeting
+    return () => {
+      api.getActiveMeeting().then(s => {
+        if (s && s.id) {
+          api.endMeeting(s.id).catch(() => {});
+        }
+      }).catch(() => {});
+    };
   }, [loadData]);
 
   // Reload items when AI classification completes (via WebSocket → refreshKey)
