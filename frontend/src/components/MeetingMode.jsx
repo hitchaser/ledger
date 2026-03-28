@@ -1,7 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import ItemCard from './ItemCard';
+import { useMentions } from '../hooks/useMentions';
+import MentionDropdown from './MentionDropdown';
 import { Square, Send, Copy, Save, X } from 'lucide-react';
 
 export default function MeetingMode({ refreshKey, onRefresh }) {
@@ -16,6 +18,8 @@ export default function MeetingMode({ refreshKey, onRefresh }) {
   const [summary, setSummary] = useState(null);
   const [addNote, setAddNote] = useState('');
   const [notes, setNotes] = useState('');
+  const captureInputRef = useRef(null);
+  const mentions = useMentions();
 
   const isPerson = type === 'person';
 
@@ -214,14 +218,23 @@ export default function MeetingMode({ refreshKey, onRefresh }) {
           ))}
         </div>
 
-        <div className="flex items-center gap-2 mt-4 pt-4 border-t border-white/[0.06]">
-          <input type="text" placeholder="Add item for this meeting..." value={captureText}
-            onChange={e => setCaptureText(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && capture()}
-            className="flex-1 glass-input rounded-lg px-3 py-2 text-sm text-zinc-200 outline-none" />
-          <button onClick={capture} className="p-2 bg-blue-600/80 hover:bg-blue-500 rounded-lg border border-blue-500/20 transition-all">
-            <Send size={14} className="text-white" />
-          </button>
+        <div className="relative mt-4 pt-4 border-t border-white/[0.06]">
+          <div className="flex items-center gap-2">
+            <div className="flex-1 relative">
+              <input type="text" placeholder="Add item for this meeting... (@ to mention)" value={captureText}
+                ref={captureInputRef}
+                onChange={e => { setCaptureText(e.target.value); mentions.updateMention(e.target.value, e.target.selectionStart); }}
+                onKeyDown={e => { if (mentions.handleMentionKey(e, captureText, setCaptureText)) return; if (e.key === 'Enter') capture(); }}
+                className="w-full glass-input rounded-lg px-3 py-2 text-sm text-zinc-200 outline-none" />
+              {mentions.isActive && (
+                <MentionDropdown results={mentions.mentionResults} selectedIndex={mentions.selectedIndex}
+                  onSelect={item => { setCaptureText(mentions.selectMention(captureText, item)); captureInputRef.current?.focus(); }} />
+              )}
+            </div>
+            <button onClick={capture} className="p-2 bg-blue-600/80 hover:bg-blue-500 rounded-lg border border-blue-500/20 transition-all">
+              <Send size={14} className="text-white" />
+            </button>
+          </div>
         </div>
       </div>
     </div>
