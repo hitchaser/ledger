@@ -16,8 +16,8 @@ from schemas import CaptureCreate, CaptureUpdate, CaptureResponse
 router = APIRouter(prefix="/api/captures", tags=["captures"])
 
 
-def parse_hashtags(text: str, db: Session):
-    """Parse and strip hashtag shortcuts from capture text."""
+def parse_shortcuts(text: str, db: Session):
+    """Parse and strip #hashtag and @mention shortcuts from capture text."""
     urgency_map = {"today": Urgency.today, "week": Urgency.this_week, "month": Urgency.this_month, "someday": Urgency.someday}
     type_map = {"todo": ItemType.todo, "followup": ItemType.followup, "reminder": ItemType.reminder,
                 "goal": ItemType.goal, "note": ItemType.note, "discussion": ItemType.discussion}
@@ -26,7 +26,10 @@ def parse_hashtags(text: str, db: Session):
     manual_type = None
     linked_people = []
     linked_projects = []
+    seen_people_ids = set()
+    seen_project_ids = set()
 
+    # Parse #hashtags (urgency, type, or person/project fallback)
     tags = re.findall(r"#(\w+)", text)
     for tag in tags:
         tl = tag.lower()
@@ -39,17 +42,42 @@ def parse_hashtags(text: str, db: Session):
                 Person.is_archived == False,
                 Person.display_name.ilike(tl)
             ).first()
-            if person:
+            if person and person.id not in seen_people_ids:
                 linked_people.append(person)
+                seen_people_ids.add(person.id)
             else:
                 project = db.query(Project).filter(
                     Project.is_archived == False,
                     or_(Project.short_code.ilike(tl), Project.name.ilike(tl))
                 ).first()
-                if project:
+                if project and project.id not in seen_project_ids:
                     linked_projects.append(project)
+                    seen_project_ids.add(project.id)
 
-    clean_text = re.sub(r"\s*#\w+", "", text).strip()
+    # Parse @mentions — match against people display_name and project name/short_code
+    mentions = re.findall(r"@(\w+)", text)
+    for mention in mentions:
+        ml = mention.lower()
+        # Try person first
+        person = db.query(Person).filter(
+            Person.is_archived == False,
+            Person.display_name.ilike(ml)
+        ).first()
+        if person and person.id not in seen_people_ids:
+            linked_people.append(person)
+            seen_people_ids.add(person.id)
+            continue
+        # Try project
+        project = db.query(Project).filter(
+            Project.is_archived == False,
+            or_(Project.short_code.ilike(ml), Project.name.ilike(ml))
+        ).first()
+        if project and project.id not in seen_project_ids:
+            linked_projects.append(project)
+            seen_project_ids.add(project.id)
+
+    # Strip # and @ tags from display text
+    clean_text = re.sub(r"\s*[#@]\w+", "", text).strip()
     return clean_text, manual_type, manual_urgency, linked_people, linked_projects
 
 
@@ -82,7 +110,7 @@ def create_capture(body: CaptureCreate, db: Session = Depends(get_db)):
     if not text:
         raise HTTPException(400, "Empty text")
 
-    clean_text, manual_type, manual_urgency, people, projects = parse_hashtags(text, db)
+    clean_text, manual_type, manual_urgency, people, projects = parse_shortcuts(text, db)
 
     item = CaptureItem(
         raw_text=clean_text or text,

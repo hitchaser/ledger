@@ -120,6 +120,32 @@ async def ai_worker():
                                     link_source=LinkSource.ai
                                 ))
 
+                    # Text-scan fallback: catch any people/projects explicitly
+                    # mentioned in the raw text that the AI missed
+                    raw_lower = item.raw_text.lower()
+                    for person in people:
+                        if person.display_name.lower() in raw_lower:
+                            existing = db.query(CaptureItemPerson).filter_by(
+                                capture_item_id=item.id, person_id=person.id
+                            ).first()
+                            if not existing:
+                                db.add(CaptureItemPerson(
+                                    capture_item_id=item.id, person_id=person.id,
+                                    link_source=LinkSource.ai
+                                ))
+                    for proj in projects:
+                        name_match = proj.name.lower() in raw_lower
+                        code_match = proj.short_code and proj.short_code.lower() in raw_lower
+                        if name_match or code_match:
+                            existing = db.query(CaptureItemProject).filter_by(
+                                capture_item_id=item.id, project_id=proj.id
+                            ).first()
+                            if not existing:
+                                db.add(CaptureItemProject(
+                                    capture_item_id=item.id, project_id=proj.id,
+                                    link_source=LinkSource.ai
+                                ))
+
                     if result.get("item_type") == "profile_update":
                         item.status = "done"
                         item.resolved_at = datetime.now(timezone.utc)
@@ -146,9 +172,43 @@ async def ai_worker():
                         })
 
                 else:
+                    # AI failed but still do text-scan linking
+                    raw_lower = item.raw_text.lower()
+                    for person in people:
+                        if person.display_name.lower() in raw_lower:
+                            existing = db.query(CaptureItemPerson).filter_by(
+                                capture_item_id=item.id, person_id=person.id
+                            ).first()
+                            if not existing:
+                                db.add(CaptureItemPerson(
+                                    capture_item_id=item.id, person_id=person.id,
+                                    link_source=LinkSource.ai
+                                ))
+                    for proj in projects:
+                        name_match = proj.name.lower() in raw_lower
+                        code_match = proj.short_code and proj.short_code.lower() in raw_lower
+                        if name_match or code_match:
+                            existing = db.query(CaptureItemProject).filter_by(
+                                capture_item_id=item.id, project_id=proj.id
+                            ).first()
+                            if not existing:
+                                db.add(CaptureItemProject(
+                                    capture_item_id=item.id, project_id=proj.id,
+                                    link_source=LinkSource.ai
+                                ))
+                    item.ai_processed_at = datetime.now(timezone.utc)
                     job.status = "failed"
                     job.error = "No result from AI"
                     db.commit()
+
+                    # Broadcast update if text-scan found links
+                    from routers.captures import item_to_response
+                    db.refresh(item)
+                    if item.linked_people or item.linked_projects:
+                        await manager.broadcast({
+                            "type": "item_updated",
+                            "item": json.loads(json.dumps(item_to_response(item), default=str)),
+                        })
 
             db.close()
         except Exception as e:
