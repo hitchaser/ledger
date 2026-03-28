@@ -188,26 +188,27 @@ Current profile:
 
 Text: "{raw_text}"
 
-Return ONLY a JSON object with:
+Return ONLY a JSON object with an "ops" array. Each op has:
 - "field": one of spouse, anniversary, children, pets, birthday, hobbies, location, general
 - "action": "add", "remove", or "replace"
 - "value": the extracted value (a single name/item for children/pets, NOT the full list)
 
 IMPORTANT RULES:
-- For NEGATION ("doesn't have", "not", "no longer", "remove", "actually doesn't") → use action "remove"
-- For CORRECTIONS ("actually has", "not Susan but Sarah") → use action "remove" for the wrong value, or "replace"
-- For NEW information ("has a daughter named X") → use action "add"
-- For children/pets: return ONLY ONE name per response, never the full list
+- For NEGATION ("doesn't have", "not", "no longer", "remove") → action "remove"
+- For CORRECTIONS ("name is James not John Jr", "not Susan but Sarah") → return TWO ops: remove the wrong value AND add the correct value
+- For NEW information ("has a daughter named X") → action "add"
+- For children/pets: each op should have ONLY ONE name, never the full list
 - For string fields (spouse, birthday, etc.): action is always "replace"
+- Most inputs produce one op. Corrections produce two ops.
 
 Examples:
-"has a daughter named Susan" → {{"field": "children", "action": "add", "value": "Susan"}}
-"doesn't have a daughter named Susan" → {{"field": "children", "action": "remove", "value": "Susan"}}
-"no longer has a dog" → {{"field": "pets", "action": "remove", "value": ""}}
-"wife is Sarah" → {{"field": "spouse", "action": "replace", "value": "Sarah"}}
-"no longer married" → {{"field": "spouse", "action": "replace", "value": ""}}
-"lives in Austin Texas" → {{"field": "location", "action": "replace", "value": "Austin, TX"}}
-"birthday is March 3" → {{"field": "birthday", "action": "replace", "value": "March 3"}}"""
+"has a daughter named Susan" → {{"ops": [{{"field": "children", "action": "add", "value": "Susan"}}]}}
+"doesn't have a daughter named Susan" → {{"ops": [{{"field": "children", "action": "remove", "value": "Susan"}}]}}
+"son's name is James not John Jr" → {{"ops": [{{"field": "children", "action": "remove", "value": "John Jr"}}, {{"field": "children", "action": "add", "value": "James"}}]}}
+"wife is Sarah" → {{"ops": [{{"field": "spouse", "action": "replace", "value": "Sarah"}}]}}
+"no longer married" → {{"ops": [{{"field": "spouse", "action": "replace", "value": ""}}]}}
+"lives in Austin Texas" → {{"ops": [{{"field": "location", "action": "replace", "value": "Austin, TX"}}]}}
+"got a new cat named Luna, gave away Max" → {{"ops": [{{"field": "pets", "action": "add", "value": "Luna (cat)"}}, {{"field": "pets", "action": "remove", "value": "Max"}}]}}"""
 
     content = _call_ai(
         [{"role": "user", "content": prompt}],
@@ -217,8 +218,12 @@ Examples:
     if content:
         try:
             result = json.loads(content)
-            if result.get("field") and result.get("value"):
+            # New multi-op format
+            if "ops" in result and isinstance(result["ops"], list) and len(result["ops"]) > 0:
                 return result
+            # Legacy single-op format — wrap in ops array
+            if result.get("field"):
+                return {"ops": [result]}
         except json.JSONDecodeError:
             pass
 
@@ -228,21 +233,21 @@ Examples:
     action = "remove" if is_negation else "add"
 
     if any(w in text_lower for w in ['daughter', 'son', 'child', 'kid', 'baby']):
-        return {"field": "children", "action": action, "value": raw_text}
+        return {"ops": [{"field": "children", "action": action, "value": raw_text}]}
     if any(w in text_lower for w in ['wife', 'husband', 'spouse', 'partner', 'married to']):
-        return {"field": "spouse", "action": "replace", "value": "" if is_negation else raw_text}
+        return {"ops": [{"field": "spouse", "action": "replace", "value": "" if is_negation else raw_text}]}
     if any(w in text_lower for w in ['dog', 'cat', 'pet', 'puppy', 'kitten', 'fish', 'bird']):
-        return {"field": "pets", "action": action, "value": raw_text}
+        return {"ops": [{"field": "pets", "action": action, "value": raw_text}]}
     if any(w in text_lower for w in ['birthday', 'born on', 'born in']):
-        return {"field": "birthday", "action": "replace", "value": "" if is_negation else raw_text}
+        return {"ops": [{"field": "birthday", "action": "replace", "value": "" if is_negation else raw_text}]}
     if 'anniversary' in text_lower:
-        return {"field": "anniversary", "action": "replace", "value": "" if is_negation else raw_text}
+        return {"ops": [{"field": "anniversary", "action": "replace", "value": "" if is_negation else raw_text}]}
     if any(w in text_lower for w in ['hobby', 'hobbies', 'enjoys', 'likes to', 'plays', 'fan of']):
-        return {"field": "hobbies", "action": "replace", "value": "" if is_negation else raw_text}
+        return {"ops": [{"field": "hobbies", "action": "replace", "value": "" if is_negation else raw_text}]}
     if any(w in text_lower for w in ['lives in', 'moved to', 'based in', 'located in']):
-        return {"field": "location", "action": "replace", "value": "" if is_negation else raw_text}
+        return {"ops": [{"field": "location", "action": "replace", "value": "" if is_negation else raw_text}]}
 
-    return {"field": "general", "action": "add", "value": raw_text}
+    return {"ops": [{"field": "general", "action": "add", "value": raw_text}]}
 
 
 # ── Meeting Summary ──

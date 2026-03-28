@@ -182,40 +182,41 @@ async def ai_worker():
                                 "pets": [], "birthday": "", "hobbies": "",
                                 "location": "", "general": ""
                             }
-                            update = parse_profile_update(item.raw_text, profile)
-                            field = update.get("field", "general")
-                            action = update.get("action", "add")
-                            value = update.get("value", item.raw_text)
+                            result = parse_profile_update(item.raw_text, profile)
+                            ops = result.get("ops", [])
 
                             # Deep copy profile to ensure SQLAlchemy detects changes
                             import copy
                             profile = copy.deepcopy(profile)
 
-                            if field in ("children", "pets"):
-                                current_list = list(profile.get(field, []))
-                                if action == "remove":
-                                    # Remove matching entry (case-insensitive)
-                                    if value:
-                                        current_list = [v for v in current_list if v.lower() != value.lower()]
-                                    else:
-                                        current_list = []  # "no longer has pets" → clear all
-                                elif action in ("add", "replace"):
-                                    # Only add if not already present (case-insensitive)
-                                    if value and not any(v.lower() == value.lower() for v in current_list):
-                                        current_list.append(value)
-                                profile[field] = current_list
-                            elif field == "general":
-                                if action == "add":
-                                    existing = profile.get("general", "")
-                                    profile["general"] = (existing + "\n" + value).strip() if existing else value
-                            else:
-                                # String fields: spouse, anniversary, birthday, hobbies, location
-                                if action == "replace":
-                                    profile[field] = value
-                                elif action == "remove":
-                                    profile[field] = ""
+                            log_parts = []
+                            for op in ops:
+                                field = op.get("field", "general")
+                                action = op.get("action", "add")
+                                value = op.get("value", "")
+
+                                if field in ("children", "pets"):
+                                    current_list = list(profile.get(field, []))
+                                    if action == "remove":
+                                        if value:
+                                            current_list = [v for v in current_list if v.lower() != value.lower()]
+                                        else:
+                                            current_list = []
+                                    elif action in ("add", "replace"):
+                                        if value and not any(v.lower() == value.lower() for v in current_list):
+                                            current_list.append(value)
+                                    profile[field] = current_list
+                                elif field == "general":
+                                    if action == "add" and value:
+                                        existing = profile.get("general", "")
+                                        profile["general"] = (existing + "\n" + value).strip() if existing else value
                                 else:
-                                    profile[field] = value
+                                    if action in ("replace", "add"):
+                                        profile[field] = value
+                                    elif action == "remove":
+                                        profile[field] = ""
+
+                                log_parts.append(f"{action} {field}: {value}" if value else f"{action} {field}")
 
                             person.profile = profile
                             from sqlalchemy.orm.attributes import flag_modified
@@ -223,7 +224,7 @@ async def ai_worker():
 
                             db.add(ProfileLog(
                                 log_type=LogType.profile_update,
-                                content=f"{field}: {value}",
+                                content="; ".join(log_parts) if log_parts else item.raw_text,
                                 person_id=person.id,
                             ))
 
