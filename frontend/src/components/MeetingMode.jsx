@@ -4,7 +4,7 @@ import { api } from '../api/client';
 import ItemCard from './ItemCard';
 import { Square, Send, Copy, Save, X } from 'lucide-react';
 
-export default function MeetingMode({ onRefresh }) {
+export default function MeetingMode({ refreshKey, onRefresh }) {
   const { type, id } = useParams();
   const navigate = useNavigate();
   const [entity, setEntity] = useState(null);
@@ -33,6 +33,11 @@ export default function MeetingMode({ onRefresh }) {
     loadData();
     api.getActiveMeeting().then(s => { if (s) setSession(s); });
   }, [loadData]);
+
+  // Reload items when AI classification completes (via WebSocket → refreshKey)
+  useEffect(() => {
+    if (refreshKey > 0) loadData();
+  }, [refreshKey, loadData]);
 
   const capture = async () => {
     const t = captureText.trim();

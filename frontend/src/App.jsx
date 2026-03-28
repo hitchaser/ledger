@@ -95,7 +95,7 @@ export default function App() {
             <Route path="/people/:id" element={<PersonProfile refreshKey={refreshKey} onRefresh={refresh} />} />
             <Route path="/projects" element={<ProjectDirectory refreshKey={refreshKey} />} />
             <Route path="/projects/:id" element={<ProjectCard refreshKey={refreshKey} onRefresh={refresh} />} />
-            <Route path="/meeting/:type/:id" element={<MeetingMode onRefresh={refresh} />} />
+            <Route path="/meeting/:type/:id" element={<MeetingMode refreshKey={refreshKey} onRefresh={refresh} />} />
             <Route path="/digest" element={<DailyDigest />} />
           </Routes>
         </main>
