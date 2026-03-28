@@ -25,7 +25,7 @@ def person_response(p: Person, db: Session) -> dict:
         "role": p.role, "reporting_level": p.reporting_level.value if p.reporting_level else "other",
         "email": p.email, "created_at": p.created_at, "updated_at": p.updated_at,
         "is_archived": p.is_archived, "context_notes": p.context_notes or "",
-        "profile": profile,
+        "profile": profile, "avatar": p.avatar,
         "open_item_count": count,
     }
 

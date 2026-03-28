@@ -24,6 +24,11 @@ Base.metadata.create_all(bind=engine)
 from sqlalchemy import inspect as sa_inspect, text as sa_text
 _insp = sa_inspect(engine)
 _people_cols = [c["name"] for c in _insp.get_columns("people")]
+if "avatar" not in _people_cols:
+    with engine.begin() as conn:
+        conn.execute(sa_text("ALTER TABLE people ADD COLUMN avatar TEXT"))
+    logger.info("Migrated people table: added avatar column")
+
 if "profile" not in _people_cols:
     with engine.begin() as conn:
         conn.execute(sa_text("ALTER TABLE people ADD COLUMN profile JSON"))

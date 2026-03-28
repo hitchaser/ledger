@@ -132,6 +132,7 @@ class Person(Base):
     updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
     is_archived = Column(Boolean, default=False)
     context_notes = Column(Text, default="")
+    avatar = Column(Text, nullable=True)  # base64 data URL
     profile = Column(JSON, default=lambda: {
         "spouse": "", "anniversary": "", "children": [],
         "pets": [], "birthday": "", "hobbies": "", "location": "", "general": ""

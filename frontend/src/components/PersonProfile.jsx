@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import ItemCard from './ItemCard';
+import AvatarUpload from './AvatarUpload';
 import { ArrowLeft, Play, Edit3, Save, Plus, Settings, X, Archive, ArchiveRestore, Trash2 } from 'lucide-react';
 
 const DEFAULT_PROFILE = {
@@ -110,15 +111,23 @@ export default function PersonProfile({ refreshKey, onRefresh }) {
       </button>
 
       <div className="flex items-start justify-between mb-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <h2 className="text-xl font-semibold text-zinc-100">{person.display_name}</h2>
-            <button onClick={() => setEditingDetails(!editingDetails)}
-              className="text-zinc-600 hover:text-zinc-300 transition-colors" title="Edit details">
-              <Settings size={16} />
-            </button>
+        <div className="flex items-center gap-4">
+          <AvatarUpload
+            src={person.avatar}
+            name={person.display_name}
+            onUpload={async (dataUrl) => { await api.updatePerson(id, { avatar: dataUrl }); const u = await api.getPerson(id); setPerson(u); }}
+            onRemove={async () => { await api.updatePerson(id, { avatar: '' }); const u = await api.getPerson(id); setPerson(u); }}
+          />
+          <div>
+            <div className="flex items-center gap-2">
+              <h2 className="text-xl font-semibold text-zinc-100">{person.display_name}</h2>
+              <button onClick={() => setEditingDetails(!editingDetails)}
+                className="text-zinc-600 hover:text-zinc-300 transition-colors" title="Edit details">
+                <Settings size={16} />
+              </button>
+            </div>
+            <p className="text-sm text-zinc-600">{person.role || 'No role set'} &middot; {person.reporting_level}{person.email ? ` · ${person.email}` : ''}</p>
           </div>
-          <p className="text-sm text-zinc-600">{person.role || 'No role set'} &middot; {person.reporting_level}{person.email ? ` · ${person.email}` : ''}</p>
         </div>
         <div className="flex items-center gap-2">
           {person.is_archived && (

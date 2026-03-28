@@ -5,6 +5,7 @@ import ItemCard from './ItemCard';
 import { useMentions } from '../hooks/useMentions';
 import MentionDropdown from './MentionDropdown';
 import { Square, Send, Copy, Save, X } from 'lucide-react';
+import Avatar from './Avatar';
 
 export default function MeetingMode({ refreshKey, onRefresh }) {
   const { type, id } = useParams();
@@ -133,7 +134,10 @@ export default function MeetingMode({ refreshKey, onRefresh }) {
     <div className="flex h-full">
       <div className="w-2/5 border-r border-white/[0.06] overflow-y-auto p-4 bg-black/20">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-bold text-zinc-100">{entity.display_name || entity.name}</h2>
+          <div className="flex items-center gap-3">
+            {isPerson && <Avatar src={entity.avatar} name={entity.display_name || entity.name} size="lg" />}
+            <h2 className="text-lg font-bold text-zinc-100">{entity.display_name || entity.name}</h2>
+          </div>
           <button onClick={endMeeting} disabled={ending || !session}
             className="flex items-center gap-1 text-xs bg-rose-500/20 hover:bg-rose-500/30 text-rose-400 rounded px-3 py-1.5 border border-rose-500/20 disabled:opacity-40 transition-all">
             <Square size={12} /> {ending ? 'Ending...' : 'End Meeting'}

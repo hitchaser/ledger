@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api/client';
 import { UserPlus, Search, Archive } from 'lucide-react';
+import Avatar from './Avatar';
 
 const LEVEL_COLORS = {
   director: 'bg-violet-500/15 text-violet-400 border border-violet-500/20',
@@ -112,9 +113,7 @@ export default function PeopleDirectory({ refreshKey }) {
           <Link key={p.id} to={`/people/${p.id}`}
             className="flex items-center justify-between px-3 py-2.5 rounded-lg hover:bg-white/[0.04] transition-all">
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-white/[0.06] border border-white/[0.08] flex items-center justify-center text-sm font-medium text-zinc-400">
-                {p.display_name[0]}
-              </div>
+              <Avatar src={p.avatar} name={p.display_name} size="md" />
               <div>
                 <span className={`text-sm font-medium ${p.is_archived ? 'text-zinc-500' : 'text-zinc-200'}`}>{p.display_name}</span>
                 {p.is_archived && <span className="text-xs text-zinc-600 ml-1.5 badge bg-zinc-500/10 border border-zinc-500/15">archived</span>}

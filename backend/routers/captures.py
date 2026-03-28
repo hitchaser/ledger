@@ -98,7 +98,7 @@ def item_to_response(item: CaptureItem) -> dict:
         "manual_urgency": item.manual_urgency.value if item.manual_urgency else None,
         "effective_type": (item.manual_type or item.item_type).value if (item.manual_type or item.item_type) else None,
         "effective_urgency": (item.manual_urgency or item.urgency).value if (item.manual_urgency or item.urgency) else None,
-        "linked_people": [{"id": p.id, "display_name": p.display_name} for p in item.linked_people],
+        "linked_people": [{"id": p.id, "display_name": p.display_name, "avatar": p.avatar} for p in item.linked_people],
         "linked_projects": [{"id": p.id, "name": p.name, "short_code": p.short_code} for p in item.linked_projects],
         "meeting_session_id": item.meeting_session_id,
     }

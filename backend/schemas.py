@@ -82,6 +82,7 @@ class PersonUpdate(BaseModel):
     context_notes: Optional[str] = None
     is_archived: Optional[bool] = None
     profile: Optional[ProfileData] = None
+    avatar: Optional[str] = None
 
 class PersonResponse(BaseModel):
     id: UUID

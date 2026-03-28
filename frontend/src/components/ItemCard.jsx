@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Check, X, Loader2, ChevronDown, ChevronUp, Pencil, Save } from 'lucide-react';
 import { api } from '../api/client';
+import Avatar from './Avatar';
 import { Link } from 'react-router-dom';
 
 const TYPE_COLORS = {
@@ -122,7 +123,8 @@ export default function ItemCard({ item, onUpdate, compact = false, readonly = f
               {type && <span className={`badge ${TYPE_COLORS[type] || TYPE_COLORS.note}`}>{type.replace('_', ' ')}</span>}
               {urgency && <span className={`badge ${URGENCY_COLORS[urgency] || URGENCY_COLORS.someday}`}>{urgency.replace('_', ' ')}</span>}
               {item.linked_people?.map(p => (
-                <Link key={p.id} to={`/people/${p.id}`} className="badge bg-indigo-500/10 text-indigo-400 border border-indigo-500/15 hover:bg-indigo-500/20 cursor-pointer transition-colors">
+                <Link key={p.id} to={`/people/${p.id}`} className="badge bg-indigo-500/10 text-indigo-400 border border-indigo-500/15 hover:bg-indigo-500/20 cursor-pointer transition-colors flex items-center gap-1">
+                  <Avatar src={p.avatar} name={p.display_name} size="xs" />
                   {p.display_name}
                 </Link>
               ))}
