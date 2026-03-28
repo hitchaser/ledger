@@ -56,36 +56,51 @@ def end_meeting(meeting_id: UUID, db: Session = Depends(get_db)):
 
     session.ended_at = datetime.now(timezone.utc)
 
-    # Count items
-    session_items = db.query(CaptureItem).filter(CaptureItem.meeting_session_id == session.id).all()
-    session.items_added = len(session_items)
-    session.items_resolved = len([i for i in session_items if i.status == ItemStatus.done])
-
-    # Also count items linked to person/project resolved during session timeframe
-    if session.person_id:
-        from models import CaptureItemPerson
-        resolved = db.query(CaptureItem).join(CaptureItemPerson).filter(
-            CaptureItemPerson.person_id == session.person_id,
-            CaptureItem.resolved_at != None,
-            CaptureItem.resolved_at >= session.started_at,
-        ).count()
-        session.items_resolved = max(session.items_resolved, resolved)
-
-    # Generate AI summary
+    # Gather all items linked to this person/project that were created or resolved during the session
+    from models import CaptureItemPerson, CaptureItemProject
+    meeting_items = []
     context_name = ""
     context_notes = ""
+
     if session.person_id:
         person = db.query(Person).get(session.person_id)
         if person:
             context_name = person.display_name
             context_notes = person.context_notes or ""
+        # Items added during session (linked to this person, created after session start)
+        added = db.query(CaptureItem).join(CaptureItemPerson).filter(
+            CaptureItemPerson.person_id == session.person_id,
+            CaptureItem.created_at >= session.started_at,
+        ).all()
+        # Items resolved during session (linked to this person, resolved after session start)
+        resolved = db.query(CaptureItem).join(CaptureItemPerson).filter(
+            CaptureItemPerson.person_id == session.person_id,
+            CaptureItem.status == ItemStatus.done,
+            CaptureItem.resolved_at != None,
+            CaptureItem.resolved_at >= session.started_at,
+        ).all()
+        meeting_items = list({i.id: i for i in added + resolved}.values())
     elif session.project_id:
         project = db.query(Project).get(session.project_id)
         if project:
             context_name = project.name
             context_notes = project.context_notes or ""
+        added = db.query(CaptureItem).join(CaptureItemProject).filter(
+            CaptureItemProject.project_id == session.project_id,
+            CaptureItem.created_at >= session.started_at,
+        ).all()
+        resolved = db.query(CaptureItem).join(CaptureItemProject).filter(
+            CaptureItemProject.project_id == session.project_id,
+            CaptureItem.status == ItemStatus.done,
+            CaptureItem.resolved_at != None,
+            CaptureItem.resolved_at >= session.started_at,
+        ).all()
+        meeting_items = list({i.id: i for i in added + resolved}.values())
 
-    summary = generate_meeting_summary(context_name, context_notes, session_items)
+    session.items_added = len([i for i in meeting_items if i.status == ItemStatus.open])
+    session.items_resolved = len([i for i in meeting_items if i.status == ItemStatus.done])
+
+    summary = generate_meeting_summary(context_name, context_notes, meeting_items)
     session.ai_summary = summary
 
     # Save as profile log

@@ -69,29 +69,25 @@ Captured text: "{raw_text}"
 
 def generate_meeting_summary(context_name: str, context_notes: str,
                               items: list) -> Optional[str]:
-    """Generate a post-meeting summary via Ollama."""
+    """Generate a structured meeting summary from item data. No AI — just facts."""
     resolved = [i for i in items if i.status and i.status.value == "done"]
-    added = [i for i in items]
-    still_open = [i for i in items if i.status and i.status.value == "open"]
+    added = [i for i in items if i.status and i.status.value == "open"]
 
-    prompt = f"""Write a brief meeting summary (3-6 sentences) for a meeting about/with {context_name}.
+    lines = [f"Meeting with {context_name}"]
+    lines.append("")
 
-Context: {context_notes[:500] if context_notes else 'No prior context'}
+    if resolved:
+        lines.append("Discussed / Completed:")
+        for i in resolved:
+            lines.append(f"  • {i.raw_text}")
 
-Items resolved during meeting: {', '.join(i.raw_text[:80] for i in resolved) if resolved else 'None'}
-Items added during meeting: {', '.join(i.raw_text[:80] for i in added) if added else 'None'}
-Still open: {', '.join(i.raw_text[:80] for i in still_open) if still_open else 'None'}
+    if added:
+        lines.append("")
+        lines.append("Added / Needs Action:")
+        for i in added:
+            lines.append(f"  • {i.raw_text}")
 
-Write a concise, professional summary paragraph."""
+    if not resolved and not added:
+        lines.append("General sync — no items added or completed.")
 
-    try:
-        resp = httpx.post(
-            f"{OLLAMA_BASE_URL}/api/generate",
-            json={"model": OLLAMA_MODEL, "prompt": prompt, "stream": False},
-            timeout=60.0,
-        )
-        resp.raise_for_status()
-        return resp.json().get("response", "").strip()
-    except Exception as e:
-        logger.warning(f"AI summary failed: {e}")
-        return None
+    return "\n".join(lines)
