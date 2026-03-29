@@ -193,6 +193,8 @@ def update_capture(item_id: UUID, body: CaptureUpdate, db: Session = Depends(get
     if not item:
         raise HTTPException(404, "Not found")
 
+    if body.raw_text is not None and body.raw_text.strip():
+        item.raw_text = body.raw_text.strip()
     if body.status is not None:
         item.status = body.status
         if body.status == "done":

@@ -10,6 +10,7 @@ class CaptureCreate(BaseModel):
     raw_text: str
 
 class CaptureUpdate(BaseModel):
+    raw_text: Optional[str] = None
     status: Optional[str] = None
     manual_type: Optional[str] = None
     manual_urgency: Optional[str] = None

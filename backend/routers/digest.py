@@ -1,7 +1,7 @@
 from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, func
+from sqlalchemy import and_, func, or_
 
 from database import get_db
 from models import CaptureItem, Person, CaptureItemPerson, CaptureItemProject, ItemStatus, Urgency, ItemType
@@ -14,25 +14,40 @@ router = APIRouter(prefix="/api/digest", tags=["digest"])
 def get_digest(db: Session = Depends(get_db)):
     now = datetime.now(timezone.utc)
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    today_end = today_start + timedelta(days=1)
 
-    # Overdue: urgency=today, created before today, still open
+    # Overdue: due_date in the past OR (urgency=today, created before today)
     overdue = db.query(CaptureItem).filter(
         CaptureItem.status == ItemStatus.open,
-        CaptureItem.created_at < today_start,
-        CaptureItem.urgency == Urgency.today,
-    ).order_by(CaptureItem.created_at).all()
+        or_(
+            and_(CaptureItem.due_date != None, CaptureItem.due_date < today_start),
+            and_(CaptureItem.due_date == None, CaptureItem.urgency == Urgency.today, CaptureItem.created_at < today_start),
+        ),
+    ).order_by(CaptureItem.due_date.asc().nullslast(), CaptureItem.created_at).all()
 
-    # Today items
+    # Today: due_date is today OR (urgency=today, created today, no due_date)
     today_items = db.query(CaptureItem).filter(
         CaptureItem.status == ItemStatus.open,
-        CaptureItem.urgency == Urgency.today,
-        CaptureItem.created_at >= today_start,
-    ).order_by(CaptureItem.created_at).all()
+        or_(
+            and_(CaptureItem.due_date != None, CaptureItem.due_date >= today_start, CaptureItem.due_date < today_end),
+            and_(CaptureItem.due_date == None, CaptureItem.urgency == Urgency.today, CaptureItem.created_at >= today_start),
+        ),
+    ).order_by(CaptureItem.due_date.asc().nullslast(), CaptureItem.created_at).all()
 
-    # This week items
+    # Upcoming: due_date in next 7 days (not today, not overdue)
+    week_end = today_start + timedelta(days=7)
+    upcoming = db.query(CaptureItem).filter(
+        CaptureItem.status == ItemStatus.open,
+        CaptureItem.due_date != None,
+        CaptureItem.due_date >= today_end,
+        CaptureItem.due_date < week_end,
+    ).order_by(CaptureItem.due_date.asc()).all()
+
+    # This week (urgency-based, no due date)
     this_week = db.query(CaptureItem).filter(
         CaptureItem.status == ItemStatus.open,
         CaptureItem.urgency == Urgency.this_week,
+        CaptureItem.due_date == None,
     ).order_by(CaptureItem.created_at).all()
 
     # Stale people: no linked items in 14+ days
@@ -57,6 +72,7 @@ def get_digest(db: Session = Depends(get_db)):
     return {
         "overdue_items": [item_to_response(i) for i in overdue],
         "today_items": [item_to_response(i) for i in today_items],
+        "upcoming_items": [item_to_response(i) for i in upcoming],
         "this_week_count": len(this_week),
         "this_week_items": [item_to_response(i) for i in this_week],
         "stale_people": stale_people,

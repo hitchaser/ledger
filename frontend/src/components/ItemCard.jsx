@@ -51,6 +51,7 @@ function formatDueDate(iso) {
 export default function ItemCard({ item, onUpdate, compact = false, readonly = false }) {
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [editText, setEditText] = useState('');
   const [editType, setEditType] = useState('');
   const [editUrgency, setEditUrgency] = useState('');
   const [editDueDate, setEditDueDate] = useState('');
@@ -89,6 +90,7 @@ export default function ItemCard({ item, onUpdate, compact = false, readonly = f
   };
 
   const startEdit = async () => {
+    setEditText(item.raw_text);
     setEditType(item.manual_type || item.effective_type || '');
     setEditUrgency(item.manual_urgency || item.effective_urgency || '');
     setEditDueDate(item.due_date ? new Date(item.due_date).toISOString().split('T')[0] : '');
@@ -100,12 +102,16 @@ export default function ItemCard({ item, onUpdate, compact = false, readonly = f
   };
 
   const saveEdit = async () => {
-    await api.updateCapture(item.id, {
+    const updates = {
       manual_type: editType || '',
       manual_urgency: editUrgency || '',
       due_date: editDueDate || '',
       recurrence: editRecurrence || '',
-    });
+    };
+    if (editText.trim() && editText.trim() !== item.raw_text) {
+      updates.raw_text = editText.trim();
+    }
+    await api.updateCapture(item.id, updates);
     setEditing(false);
     onUpdate?.();
   };
@@ -146,6 +152,8 @@ export default function ItemCard({ item, onUpdate, compact = false, readonly = f
 
           {editing ? (
             <div className="mt-2">
+            <input value={editText} onChange={e => setEditText(e.target.value)}
+              className="w-full glass-input rounded px-2 py-1.5 text-sm text-zinc-200 outline-none mb-2" />
             <div className="flex flex-wrap items-center gap-2">
               <select value={editType} onChange={e => setEditType(e.target.value)}
                 className="glass-input rounded px-2 py-1 text-xs text-zinc-300 outline-none">

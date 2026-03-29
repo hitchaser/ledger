@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { api } from '../api/client';
 import ItemCard from './ItemCard';
 import { Link } from 'react-router-dom';
-import { AlertTriangle, CalendarDays, Users, HelpCircle } from 'lucide-react';
+import { AlertTriangle, CalendarDays, Users, HelpCircle, Clock } from 'lucide-react';
 
 export default function DailyDigest() {
   const [digest, setDigest] = useState(null);
@@ -37,16 +37,25 @@ export default function DailyDigest() {
         </section>
       )}
 
-      <section className="mb-6">
-        <h3 className="text-sm font-medium text-blue-400 mb-2">This Week ({digest.this_week_count})</h3>
-        {digest.this_week_items.length > 0 ? (
+      {digest.upcoming_items?.length > 0 && (
+        <section className="mb-6">
+          <h3 className="text-sm font-medium text-blue-400 mb-2 flex items-center gap-1.5">
+            <Clock size={14} /> Upcoming — Next 7 Days ({digest.upcoming_items.length})
+          </h3>
+          <div className="flex flex-col gap-2">
+            {digest.upcoming_items.map(i => <ItemCard key={i.id} item={i} compact />)}
+          </div>
+        </section>
+      )}
+
+      {digest.this_week_items?.length > 0 && (
+        <section className="mb-6">
+          <h3 className="text-sm font-medium text-zinc-400 mb-2">This Week — No Date ({digest.this_week_count})</h3>
           <div className="flex flex-col gap-2">
             {digest.this_week_items.map(i => <ItemCard key={i.id} item={i} compact />)}
           </div>
-        ) : (
-          <p className="text-sm text-zinc-700">Nothing scheduled this week</p>
-        )}
-      </section>
+        </section>
+      )}
 
       {digest.stale_people.length > 0 && (
         <section className="mb-6">
@@ -72,7 +81,7 @@ export default function DailyDigest() {
         </section>
       )}
 
-      {digest.overdue_items.length === 0 && digest.today_items.length === 0 && digest.this_week_count === 0 && (
+      {digest.overdue_items.length === 0 && digest.today_items.length === 0 && (digest.upcoming_items?.length || 0) === 0 && digest.this_week_count === 0 && (
         <div className="text-center text-zinc-700 py-12 text-sm">All clear! Nothing pressing today.</div>
       )}
     </div>
