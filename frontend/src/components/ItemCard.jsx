@@ -145,7 +145,8 @@ export default function ItemCard({ item, onUpdate, compact = false, readonly = f
           </div>
 
           {editing ? (
-            <div className="flex flex-wrap items-center gap-2 mt-2">
+            <div className="mt-2">
+            <div className="flex flex-wrap items-center gap-2">
               <select value={editType} onChange={e => setEditType(e.target.value)}
                 className="glass-input rounded px-2 py-1 text-xs text-zinc-300 outline-none">
                 <option value="">Type...</option>
@@ -206,6 +207,7 @@ export default function ItemCard({ item, onUpdate, compact = false, readonly = f
                   </div>
                 </div>
               )}
+            </div>
             </div>
           ) : (
             <div className="flex flex-wrap items-center gap-1.5 mt-2">
