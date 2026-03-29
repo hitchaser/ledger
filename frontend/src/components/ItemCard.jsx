@@ -57,7 +57,9 @@ export default function ItemCard({ item, onUpdate, compact = false, readonly = f
   const [editRecurrence, setEditRecurrence] = useState('');
   const [showNotes, setShowNotes] = useState(false);
   const [newNote, setNewNote] = useState('');
-  const [showLinkMenu, setShowLinkMenu] = useState(false);
+  const [showPredPicker, setShowPredPicker] = useState(false);
+  const [openItems, setOpenItems] = useState([]);
+  const [predSearch, setPredSearch] = useState('');
   const type = item.effective_type;
   const urgency = item.effective_urgency;
   const isProcessing = !item.ai_processed_at && !item.manual_type;
@@ -86,12 +88,15 @@ export default function ItemCard({ item, onUpdate, compact = false, readonly = f
     onUpdate?.();
   };
 
-  const startEdit = () => {
+  const startEdit = async () => {
     setEditType(item.manual_type || item.effective_type || '');
     setEditUrgency(item.manual_urgency || item.effective_urgency || '');
     setEditDueDate(item.due_date ? new Date(item.due_date).toISOString().split('T')[0] : '');
     setEditRecurrence(item.recurrence || '');
     setEditing(true);
+    // Load open items for predecessor picker
+    const items = await api.listCaptures({ status: 'open', limit: 50 });
+    setOpenItems(items.filter(i => i.id !== item.id));
   };
 
   const saveEdit = async () => {
@@ -159,7 +164,48 @@ export default function ItemCard({ item, onUpdate, compact = false, readonly = f
                 {RECURRENCE_OPTIONS.filter(Boolean).map(r => <option key={r} value={r}>{r}</option>)}
               </select>
               <button onClick={saveEdit} className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300"><Save size={12} /> Save</button>
-              <button onClick={() => setEditing(false)} className="text-xs text-zinc-600 hover:text-zinc-400">Cancel</button>
+              <button onClick={() => { setEditing(false); setShowPredPicker(false); }} className="text-xs text-zinc-600 hover:text-zinc-400">Cancel</button>
+            </div>
+            {/* Predecessors in edit mode */}
+            <div className="mt-2">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-xs text-zinc-500"><Link2 size={11} className="inline mr-0.5" />Depends on:</span>
+                <button onClick={() => setShowPredPicker(!showPredPicker)} className="text-xs text-blue-400 hover:text-blue-300"><Plus size={12} className="inline" /> Add</button>
+              </div>
+              {item.predecessors?.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mb-1">
+                  {item.predecessors.map(p => (
+                    <div key={p.id} className="badge bg-amber-500/10 text-amber-400 border border-amber-500/15 flex items-center gap-1">
+                      <span className="max-w-[200px] truncate">{p.raw_text}</span>
+                      <button onClick={async () => { await api.removePredecessor(item.id, p.id); onUpdate?.(); }}
+                        className="text-amber-600 hover:text-amber-300"><X size={10} /></button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {showPredPicker && (
+                <div className="mt-1">
+                  <input value={predSearch} onChange={e => setPredSearch(e.target.value)} placeholder="Search items..."
+                    className="w-full glass-input rounded px-2 py-1 text-xs text-zinc-300 outline-none mb-1" />
+                  <div className="max-h-32 overflow-y-auto flex flex-col gap-0.5">
+                    {openItems
+                      .filter(i => !item.predecessors?.some(p => p.id === i.id))
+                      .filter(i => !predSearch || i.raw_text.toLowerCase().includes(predSearch.toLowerCase()))
+                      .slice(0, 8)
+                      .map(i => (
+                        <button key={i.id}
+                          onClick={async () => { await api.addPredecessor(item.id, i.id); setShowPredPicker(false); setPredSearch(''); onUpdate?.(); }}
+                          className="w-full text-left px-2 py-1.5 rounded text-xs text-zinc-400 hover:bg-white/[0.04] truncate transition-colors">
+                          {i.raw_text.slice(0, 80)}
+                        </button>
+                      ))
+                    }
+                    {openItems.filter(i => !item.predecessors?.some(p => p.id === i.id)).length === 0 && (
+                      <span className="text-xs text-zinc-700 px-2 py-1">No other open items</span>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             <div className="flex flex-wrap items-center gap-1.5 mt-2">
