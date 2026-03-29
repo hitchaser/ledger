@@ -28,6 +28,7 @@ def parse_shortcuts(text: str, db: Session):
     linked_projects = []
     seen_people_ids = set()
     seen_project_ids = set()
+    matched_tags = set()  # Track which #/@ tags actually matched something
 
     # Parse #hashtags (urgency, type, or person/project fallback)
     tags = re.findall(r"#(\w+)", text)
@@ -35,8 +36,10 @@ def parse_shortcuts(text: str, db: Session):
         tl = tag.lower()
         if tl in urgency_map:
             manual_urgency = urgency_map[tl]
+            matched_tags.add(f"#{tag}")
         elif tl in type_map:
             manual_type = type_map[tl]
+            matched_tags.add(f"#{tag}")
         else:
             person = db.query(Person).filter(
                 Person.is_archived == False,
@@ -45,6 +48,7 @@ def parse_shortcuts(text: str, db: Session):
             if person and person.id not in seen_people_ids:
                 linked_people.append(person)
                 seen_people_ids.add(person.id)
+                matched_tags.add(f"#{tag}")
             else:
                 project = db.query(Project).filter(
                     Project.is_archived == False,
@@ -53,12 +57,12 @@ def parse_shortcuts(text: str, db: Session):
                 if project and project.id not in seen_project_ids:
                     linked_projects.append(project)
                     seen_project_ids.add(project.id)
+                    matched_tags.add(f"#{tag}")
 
     # Parse @mentions — match against people display_name and project name/short_code
     mentions = re.findall(r"@(\w+)", text)
     for mention in mentions:
         ml = mention.lower()
-        # Try person first
         person = db.query(Person).filter(
             Person.is_archived == False,
             Person.display_name.ilike(ml)
@@ -66,8 +70,8 @@ def parse_shortcuts(text: str, db: Session):
         if person and person.id not in seen_people_ids:
             linked_people.append(person)
             seen_people_ids.add(person.id)
+            matched_tags.add(f"@{mention}")
             continue
-        # Try project
         project = db.query(Project).filter(
             Project.is_archived == False,
             or_(Project.short_code.ilike(ml), Project.name.ilike(ml))
@@ -75,9 +79,13 @@ def parse_shortcuts(text: str, db: Session):
         if project and project.id not in seen_project_ids:
             linked_projects.append(project)
             seen_project_ids.add(project.id)
+            matched_tags.add(f"@{mention}")
 
-    # Strip # and @ tags from display text
-    clean_text = re.sub(r"\s*[#@]\w+", "", text).strip()
+    # Only strip tags that actually matched — keep unmatched @names in text
+    clean_text = text
+    for tag in matched_tags:
+        clean_text = re.sub(r"\s*" + re.escape(tag) + r"\b", "", clean_text)
+    clean_text = clean_text.strip()
     return clean_text, manual_type, manual_urgency, linked_people, linked_projects
 
 
