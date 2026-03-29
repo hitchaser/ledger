@@ -66,8 +66,22 @@ export const api = {
     return null;
   },
 
+  // Item Notes
+  addNote: (itemId, content) => request(`/captures/${itemId}/notes`, { method: 'POST', body: JSON.stringify({ content }) }),
+  deleteNote: (itemId, noteId) => request(`/captures/${itemId}/notes/${noteId}`, { method: 'DELETE' }),
+
+  // Predecessors
+  addPredecessor: (itemId, predId) => request(`/captures/${itemId}/predecessors/${predId}`, { method: 'POST' }),
+  removePredecessor: (itemId, predId) => request(`/captures/${itemId}/predecessors/${predId}`, { method: 'DELETE' }),
+
   // Digest
   getDigest: () => request('/digest'),
+
+  // Timeline
+  getTimeline: (days = 7) => request(`/timeline?days=${days}`),
+
+  // Meeting Prep
+  getMeetingPrep: (type, id) => request(`/meetings/prep/${type}/${id}`),
 
   // Settings
   getSettings: () => request('/settings'),

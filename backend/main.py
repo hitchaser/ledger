@@ -23,6 +23,13 @@ Base.metadata.create_all(bind=engine)
 # Migration: add profile column if missing
 from sqlalchemy import inspect as sa_inspect, text as sa_text
 _insp = sa_inspect(engine)
+_capture_cols = [c["name"] for c in _insp.get_columns("capture_items")]
+for col_name, col_def in [("due_date", "TIMESTAMP WITH TIME ZONE"), ("is_pinned", "BOOLEAN DEFAULT false"), ("recurrence", "VARCHAR")]:
+    if col_name not in _capture_cols:
+        with engine.begin() as conn:
+            conn.execute(sa_text(f"ALTER TABLE capture_items ADD COLUMN {col_name} {col_def}"))
+        logger.info(f"Migrated capture_items: added {col_name}")
+
 _people_cols = [c["name"] for c in _insp.get_columns("people")]
 if "avatar" not in _people_cols:
     with engine.begin() as conn:
@@ -115,6 +122,14 @@ async def ai_worker():
                         item.urgency = result["urgency"]
                     item.ai_confidence = result.get("confidence", 0.0)
                     item.ai_processed_at = datetime.now(timezone.utc)
+
+                    # Set due date if AI extracted one
+                    if result.get("due_date") and not item.due_date:
+                        try:
+                            from dateutil.parser import parse as parse_date
+                            item.due_date = parse_date(result["due_date"])
+                        except Exception:
+                            pass
 
                     # Track linked IDs to avoid duplicate inserts
                     linked_people_ids = set(
@@ -379,6 +394,7 @@ from routers.projects import router as projects_router
 from routers.meetings import router as meetings_router
 from routers.digest import router as digest_router
 from routers.settings import router as settings_router
+from routers.timeline import router as timeline_router
 
 app.include_router(auth_router)
 app.include_router(captures_router)
@@ -387,6 +403,7 @@ app.include_router(projects_router)
 app.include_router(meetings_router)
 app.include_router(digest_router)
 app.include_router(settings_router)
+app.include_router(timeline_router)
 
 
 # ── WebSocket (auth-protected) ──

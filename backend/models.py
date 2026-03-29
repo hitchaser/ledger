@@ -111,10 +111,22 @@ class CaptureItem(Base):
     manual_type = Column(Enum(ItemType), nullable=True)
     manual_urgency = Column(Enum(Urgency), nullable=True)
 
+    # Due date + pin + recurring
+    due_date = Column(DateTime(timezone=True), nullable=True)
+    is_pinned = Column(Boolean, default=False)
+    recurrence = Column(String, nullable=True)  # daily, weekly, biweekly, monthly
+
     # Relations
     meeting_session_id = Column(UUID(as_uuid=True), ForeignKey("meeting_sessions.id"), nullable=True)
     linked_people = relationship("Person", secondary="capture_item_people", back_populates="capture_items")
     linked_projects = relationship("Project", secondary="capture_item_projects", back_populates="capture_items")
+    notes = relationship("ItemNote", back_populates="capture_item", order_by="ItemNote.created_at")
+    predecessors = relationship(
+        "CaptureItem", secondary="item_links",
+        primaryjoin="CaptureItem.id==item_links.c.item_id",
+        secondaryjoin="CaptureItem.id==item_links.c.predecessor_id",
+        backref="successors",
+    )
 
     @property
     def effective_type(self):
@@ -196,6 +208,24 @@ class ProfileLog(Base):
 
     person = relationship("Person", back_populates="profile_logs", foreign_keys=[person_id])
     project = relationship("Project", back_populates="profile_logs", foreign_keys=[project_id])
+
+
+class ItemNote(Base):
+    __tablename__ = "item_notes"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    capture_item_id = Column(UUID(as_uuid=True), ForeignKey("capture_items.id", ondelete="CASCADE"), nullable=False)
+    content = Column(Text, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=utcnow)
+
+    capture_item = relationship("CaptureItem", back_populates="notes")
+
+
+item_links = Table(
+    "item_links", Base.metadata,
+    Column("item_id", UUID(as_uuid=True), ForeignKey("capture_items.id", ondelete="CASCADE"), primary_key=True),
+    Column("predecessor_id", UUID(as_uuid=True), ForeignKey("capture_items.id", ondelete="CASCADE"), primary_key=True),
+)
 
 
 class Setting(Base):

@@ -14,6 +14,9 @@ class CaptureUpdate(BaseModel):
     manual_type: Optional[str] = None
     manual_urgency: Optional[str] = None
     resolution_note: Optional[str] = None
+    due_date: Optional[str] = None
+    is_pinned: Optional[bool] = None
+    recurrence: Optional[str] = None
 
 class PersonRef(BaseModel):
     id: UUID

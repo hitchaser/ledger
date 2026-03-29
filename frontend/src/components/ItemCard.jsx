@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { Check, X, Loader2, ChevronDown, ChevronUp, Pencil, Save } from 'lucide-react';
+import { Check, X, Loader2, ChevronDown, ChevronUp, Pencil, Save, Pin, PinOff, Calendar, MessageSquare, Link2, Repeat, Plus, User, FolderKanban } from 'lucide-react';
 import { api } from '../api/client';
-import Avatar from './Avatar';
 import { Link } from 'react-router-dom';
+import Avatar from './Avatar';
 
 const TYPE_COLORS = {
   followup: 'bg-sky-500/15 text-sky-400 border border-sky-500/20',
@@ -21,6 +21,7 @@ const URGENCY_COLORS = {
   someday: 'bg-zinc-500/10 text-zinc-500 border border-zinc-500/15',
 };
 
+const RECURRENCE_OPTIONS = ['', 'daily', 'weekly', 'biweekly', 'monthly'];
 const TYPE_OPTIONS = ['', 'todo', 'followup', 'reminder', 'discussion', 'goal', 'note'];
 const URGENCY_OPTIONS = ['', 'today', 'this_week', 'this_month', 'someday'];
 
@@ -35,24 +36,38 @@ function timeAgo(dateStr) {
   return `${days}d ago`;
 }
 
+function formatDueDate(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const now = new Date();
+  const diff = d - now;
+  const days = Math.ceil(diff / 86400000);
+  if (days < 0) return `Overdue ${Math.abs(days)}d`;
+  if (days === 0) return 'Due today';
+  if (days === 1) return 'Due tomorrow';
+  return `Due ${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+}
+
 export default function ItemCard({ item, onUpdate, compact = false, readonly = false }) {
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editType, setEditType] = useState('');
   const [editUrgency, setEditUrgency] = useState('');
+  const [editDueDate, setEditDueDate] = useState('');
+  const [editRecurrence, setEditRecurrence] = useState('');
+  const [showNotes, setShowNotes] = useState(false);
+  const [newNote, setNewNote] = useState('');
+  const [showLinkMenu, setShowLinkMenu] = useState(false);
   const type = item.effective_type;
   const urgency = item.effective_urgency;
   const isProcessing = !item.ai_processed_at && !item.manual_type;
   const isDone = item.status === 'done';
   const displayText = (!expanded && !editing && item.raw_text.length > 120) ? item.raw_text.slice(0, 120) + '...' : item.raw_text;
+  const dueLabel = formatDueDate(item.due_date);
+  const isOverdue = item.due_date && new Date(item.due_date) < new Date() && !isDone;
 
   const markDone = async () => {
     await api.updateCapture(item.id, { status: 'done' });
-    onUpdate?.();
-  };
-
-  const deleteItem = async () => {
-    await api.deleteCapture(item.id);
     onUpdate?.();
   };
 
@@ -61,9 +76,21 @@ export default function ItemCard({ item, onUpdate, compact = false, readonly = f
     onUpdate?.();
   };
 
+  const deleteItem = async () => {
+    await api.deleteCapture(item.id);
+    onUpdate?.();
+  };
+
+  const togglePin = async () => {
+    await api.updateCapture(item.id, { is_pinned: !item.is_pinned });
+    onUpdate?.();
+  };
+
   const startEdit = () => {
     setEditType(item.manual_type || item.effective_type || '');
     setEditUrgency(item.manual_urgency || item.effective_urgency || '');
+    setEditDueDate(item.due_date ? new Date(item.due_date).toISOString().split('T')[0] : '');
+    setEditRecurrence(item.recurrence || '');
     setEditing(true);
   };
 
@@ -71,13 +98,22 @@ export default function ItemCard({ item, onUpdate, compact = false, readonly = f
     await api.updateCapture(item.id, {
       manual_type: editType || '',
       manual_urgency: editUrgency || '',
+      due_date: editDueDate || '',
+      recurrence: editRecurrence || '',
     });
     setEditing(false);
     onUpdate?.();
   };
 
+  const addNote = async () => {
+    if (!newNote.trim()) return;
+    await api.addNote(item.id, newNote.trim());
+    setNewNote('');
+    onUpdate?.();
+  };
+
   return (
-    <div className={`group glass glass-hover rounded-lg ${compact ? 'px-3 py-2' : 'px-4 py-3'} transition-all`}>
+    <div className={`group glass glass-hover rounded-lg ${compact ? 'px-3 py-2' : 'px-4 py-3'} transition-all ${item.is_pinned ? 'border-blue-500/20' : ''}`}>
       <div className="flex items-start gap-3">
         {!readonly && !isDone && (
           <button onClick={markDone} className="mt-0.5 flex-shrink-0 w-5 h-5 rounded border border-white/10 hover:border-blue-400/50 hover:bg-blue-500/10 flex items-center justify-center transition-all">
@@ -90,43 +126,48 @@ export default function ItemCard({ item, onUpdate, compact = false, readonly = f
           </button>
         )}
         <div className="flex-1 min-w-0">
-          <p className={`text-sm leading-relaxed ${isDone ? 'text-zinc-500 line-through' : 'text-zinc-300'}`}>
-            {displayText}
-            {item.raw_text.length > 120 && !editing && (
-              <button onClick={() => setExpanded(!expanded)} className="ml-1 text-zinc-600 hover:text-zinc-400">
-                {expanded ? <ChevronUp size={14} className="inline" /> : <ChevronDown size={14} className="inline" />}
-              </button>
-            )}
-          </p>
+          <div className="flex items-start gap-1">
+            {item.is_pinned && <Pin size={12} className="text-blue-400 mt-0.5 flex-shrink-0" />}
+            {item.recurrence && <Repeat size={12} className="text-violet-400 mt-0.5 flex-shrink-0" title={`Recurring: ${item.recurrence}`} />}
+            <p className={`text-sm leading-relaxed ${isDone ? 'text-zinc-500 line-through' : 'text-zinc-300'}`}>
+              {displayText}
+              {item.raw_text.length > 120 && !editing && (
+                <button onClick={() => setExpanded(!expanded)} className="ml-1 text-zinc-600 hover:text-zinc-400">
+                  {expanded ? <ChevronUp size={14} className="inline" /> : <ChevronDown size={14} className="inline" />}
+                </button>
+              )}
+            </p>
+          </div>
 
           {editing ? (
             <div className="flex flex-wrap items-center gap-2 mt-2">
               <select value={editType} onChange={e => setEditType(e.target.value)}
                 className="glass-input rounded px-2 py-1 text-xs text-zinc-300 outline-none">
                 <option value="">Type...</option>
-                {TYPE_OPTIONS.filter(Boolean).map(t => (
-                  <option key={t} value={t}>{t.replace('_', ' ')}</option>
-                ))}
+                {TYPE_OPTIONS.filter(Boolean).map(t => <option key={t} value={t}>{t.replace('_', ' ')}</option>)}
               </select>
               <select value={editUrgency} onChange={e => setEditUrgency(e.target.value)}
                 className="glass-input rounded px-2 py-1 text-xs text-zinc-300 outline-none">
                 <option value="">Urgency...</option>
-                {URGENCY_OPTIONS.filter(Boolean).map(u => (
-                  <option key={u} value={u}>{u.replace('_', ' ')}</option>
-                ))}
+                {URGENCY_OPTIONS.filter(Boolean).map(u => <option key={u} value={u}>{u.replace('_', ' ')}</option>)}
               </select>
-              <button onClick={saveEdit} className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 transition-colors">
-                <Save size={12} /> Save
-              </button>
-              <button onClick={() => setEditing(false)} className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors">
-                Cancel
-              </button>
+              <input type="date" value={editDueDate} onChange={e => setEditDueDate(e.target.value)}
+                className="glass-input rounded px-2 py-1 text-xs text-zinc-300 outline-none" />
+              <select value={editRecurrence} onChange={e => setEditRecurrence(e.target.value)}
+                className="glass-input rounded px-2 py-1 text-xs text-zinc-300 outline-none">
+                <option value="">No repeat</option>
+                {RECURRENCE_OPTIONS.filter(Boolean).map(r => <option key={r} value={r}>{r}</option>)}
+              </select>
+              <button onClick={saveEdit} className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300"><Save size={12} /> Save</button>
+              <button onClick={() => setEditing(false)} className="text-xs text-zinc-600 hover:text-zinc-400">Cancel</button>
             </div>
           ) : (
             <div className="flex flex-wrap items-center gap-1.5 mt-2">
               {isProcessing && <span className="badge bg-white/5 text-zinc-500 border border-white/10"><Loader2 size={10} className="inline animate-spin mr-1" />classifying</span>}
               {type && <span className={`badge ${TYPE_COLORS[type] || TYPE_COLORS.note}`}>{type.replace('_', ' ')}</span>}
               {urgency && <span className={`badge ${URGENCY_COLORS[urgency] || URGENCY_COLORS.someday}`}>{urgency.replace('_', ' ')}</span>}
+              {dueLabel && <span className={`badge ${isOverdue ? 'bg-rose-500/20 text-rose-400 border border-rose-500/25' : 'bg-zinc-500/10 text-zinc-400 border border-zinc-500/15'}`}><Calendar size={10} className="inline mr-0.5" />{dueLabel}</span>}
+              {item.recurrence && <span className="badge bg-violet-500/10 text-violet-400 border border-violet-500/15"><Repeat size={10} className="inline mr-0.5" />{item.recurrence}</span>}
               {item.linked_people?.map(p => (
                 <Link key={p.id} to={`/people/${p.id}`} className="badge bg-indigo-500/10 text-indigo-400 border border-indigo-500/15 hover:bg-indigo-500/20 cursor-pointer transition-colors flex items-center gap-1">
                   <Avatar src={p.avatar} name={p.display_name} size="xs" />
@@ -138,12 +179,47 @@ export default function ItemCard({ item, onUpdate, compact = false, readonly = f
                   {p.short_code || p.name}
                 </Link>
               ))}
+              {item.predecessors?.length > 0 && (
+                <span className="badge bg-amber-500/10 text-amber-400 border border-amber-500/15" title={item.predecessors.map(p => p.raw_text).join(', ')}>
+                  <Link2 size={10} className="inline mr-0.5" />{item.predecessors.length} dep
+                </span>
+              )}
               <span className="text-xs text-zinc-700 ml-auto">{timeAgo(item.created_at)}</span>
             </div>
           )}
+
+          {/* Notes thread */}
+          {item.notes?.length > 0 && !editing && (
+            <button onClick={() => setShowNotes(!showNotes)} className="flex items-center gap-1 text-xs text-zinc-600 hover:text-zinc-400 mt-1.5 transition-colors">
+              <MessageSquare size={11} /> {item.notes.length} note{item.notes.length > 1 ? 's' : ''}
+            </button>
+          )}
+          {showNotes && item.notes?.map(n => (
+            <div key={n.id} className="flex items-start gap-2 mt-1 ml-2 pl-2 border-l border-white/[0.06]">
+              <p className="text-xs text-zinc-400 flex-1">{n.content}</p>
+              <span className="text-xs text-zinc-700 flex-shrink-0">{timeAgo(n.created_at)}</span>
+            </div>
+          ))}
+          {/* Add note input */}
+          {!readonly && !editing && (showNotes || item.notes?.length === 0) && (
+            <div className="flex gap-2 mt-1.5">
+              <input value={newNote} onChange={e => setNewNote(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && addNote()}
+                placeholder="Add a note..."
+                className="flex-1 glass-input rounded px-2 py-0.5 text-xs text-zinc-300 outline-none" />
+            </div>
+          )}
         </div>
+
+        {/* Action buttons */}
         {!readonly && !editing && (
           <div className="flex items-center gap-0.5 md:opacity-0 md:group-hover:opacity-100 transition-all">
+            <button onClick={togglePin} className={`mt-0.5 p-1 transition-all ${item.is_pinned ? 'text-blue-400' : 'text-zinc-700 hover:text-zinc-400'}`} title={item.is_pinned ? 'Unpin' : 'Pin'}>
+              {item.is_pinned ? <PinOff size={13} /> : <Pin size={13} />}
+            </button>
+            <button onClick={() => setShowNotes(!showNotes)} className="mt-0.5 p-1 text-zinc-700 hover:text-zinc-400" title="Notes">
+              <MessageSquare size={13} />
+            </button>
             <button onClick={startEdit} className="mt-0.5 p-1 text-zinc-700 hover:text-zinc-400" title="Edit">
               <Pencil size={13} />
             </button>

@@ -116,6 +116,11 @@ def item_to_response(item: CaptureItem) -> dict:
         "linked_people": [{"id": p.id, "display_name": p.display_name, "avatar": p.avatar} for p in item.linked_people],
         "linked_projects": [{"id": p.id, "name": p.name, "short_code": p.short_code} for p in item.linked_projects],
         "meeting_session_id": item.meeting_session_id,
+        "due_date": item.due_date.isoformat() if item.due_date else None,
+        "is_pinned": item.is_pinned or False,
+        "recurrence": item.recurrence,
+        "notes": [{"id": n.id, "content": n.content, "created_at": n.created_at.isoformat()} for n in (item.notes or [])],
+        "predecessors": [{"id": p.id, "raw_text": p.raw_text[:80]} for p in (item.predecessors or [])],
     }
 
 
@@ -178,7 +183,7 @@ def list_captures(
     if search:
         q = q.filter(CaptureItem.raw_text.ilike(f"%{search}%"))
 
-    items = q.order_by(CaptureItem.created_at.desc()).offset(offset).limit(limit).all()
+    items = q.order_by(CaptureItem.is_pinned.desc().nullslast(), CaptureItem.created_at.desc()).offset(offset).limit(limit).all()
     return [item_to_response(i) for i in items]
 
 
@@ -198,10 +203,50 @@ def update_capture(item_id: UUID, body: CaptureUpdate, db: Session = Depends(get
         item.manual_urgency = body.manual_urgency if body.manual_urgency != "" else None
     if body.resolution_note is not None:
         item.resolution_note = body.resolution_note
+    if body.due_date is not None:
+        from dateutil.parser import parse as parse_date
+        item.due_date = parse_date(body.due_date) if body.due_date else None
+    if body.is_pinned is not None:
+        item.is_pinned = body.is_pinned
+    if body.recurrence is not None:
+        item.recurrence = body.recurrence if body.recurrence else None
+
+    # Handle recurring: when completing a recurring item, create next occurrence
+    if body.status == "done" and item.recurrence:
+        _create_next_recurrence(item, db)
 
     db.commit()
     db.refresh(item)
     return item_to_response(item)
+
+
+def _create_next_recurrence(item, db):
+    """Create the next occurrence of a recurring item."""
+    from datetime import timedelta
+    intervals = {"daily": timedelta(days=1), "weekly": timedelta(weeks=1),
+                 "biweekly": timedelta(weeks=2), "monthly": timedelta(days=30)}
+    delta = intervals.get(item.recurrence)
+    if not delta:
+        return
+    base_date = item.due_date or datetime.now(timezone.utc)
+    next_date = base_date + delta
+
+    new_item = CaptureItem(
+        raw_text=item.raw_text,
+        status=ItemStatus.open,
+        manual_type=item.manual_type or item.item_type,
+        manual_urgency=item.manual_urgency or item.urgency,
+        due_date=next_date,
+        is_pinned=item.is_pinned,
+        recurrence=item.recurrence,
+    )
+    db.add(new_item)
+    db.flush()
+    # Copy people/project links
+    for link in db.query(CaptureItemPerson).filter_by(capture_item_id=item.id).all():
+        db.add(CaptureItemPerson(capture_item_id=new_item.id, person_id=link.person_id, link_source=link.link_source))
+    for link in db.query(CaptureItemProject).filter_by(capture_item_id=item.id).all():
+        db.add(CaptureItemProject(capture_item_id=new_item.id, project_id=link.project_id, link_source=link.link_source))
 
 
 @router.delete("/{item_id}")
@@ -247,4 +292,52 @@ def unlink_project(item_id: UUID, project_id: UUID, db: Session = Depends(get_db
     if link:
         db.delete(link)
         db.commit()
+    return {"ok": True}
+
+
+# ── Item Notes ──
+
+@router.post("/{item_id}/notes")
+def add_note(item_id: UUID, body: dict, db: Session = Depends(get_db)):
+    from models import ItemNote
+    item = db.query(CaptureItem).filter(CaptureItem.id == item_id).first()
+    if not item:
+        raise HTTPException(404, "Not found")
+    note = ItemNote(capture_item_id=item_id, content=body.get("content", "").strip())
+    db.add(note)
+    db.commit()
+    return {"id": note.id, "content": note.content, "created_at": note.created_at.isoformat()}
+
+
+@router.delete("/{item_id}/notes/{note_id}")
+def delete_note(item_id: UUID, note_id: UUID, db: Session = Depends(get_db)):
+    from models import ItemNote
+    note = db.query(ItemNote).filter(ItemNote.id == note_id, ItemNote.capture_item_id == item_id).first()
+    if note:
+        db.delete(note)
+        db.commit()
+    return {"ok": True}
+
+
+# ── Predecessor Links ──
+
+@router.post("/{item_id}/predecessors/{pred_id}")
+def add_predecessor(item_id: UUID, pred_id: UUID, db: Session = Depends(get_db)):
+    from models import item_links
+    existing = db.execute(item_links.select().where(
+        item_links.c.item_id == item_id, item_links.c.predecessor_id == pred_id
+    )).first()
+    if not existing:
+        db.execute(item_links.insert().values(item_id=item_id, predecessor_id=pred_id))
+        db.commit()
+    return {"ok": True}
+
+
+@router.delete("/{item_id}/predecessors/{pred_id}")
+def remove_predecessor(item_id: UUID, pred_id: UUID, db: Session = Depends(get_db)):
+    from models import item_links
+    db.execute(item_links.delete().where(
+        item_links.c.item_id == item_id, item_links.c.predecessor_id == pred_id
+    ))
+    db.commit()
     return {"ok": True}

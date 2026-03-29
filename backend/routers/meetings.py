@@ -4,9 +4,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import MeetingSession, CaptureItem, Person, Project, ProfileLog, LogType, ItemStatus
+from models import MeetingSession, CaptureItem, CaptureItemPerson, CaptureItemProject, Person, Project, ProfileLog, LogType, ItemStatus
 from schemas import MeetingCreate, MeetingResponse
 from services.ai_service import generate_meeting_summary
+from sqlalchemy import func
 
 router = APIRouter(prefix="/api/meetings", tags=["meetings"])
 
@@ -44,6 +45,43 @@ def get_meeting(meeting_id: UUID, db: Session = Depends(get_db)):
     if not session:
         raise HTTPException(404, "Not found")
     return session
+
+
+@router.get("/prep/{entity_type}/{entity_id}")
+def meeting_prep(entity_type: str, entity_id: UUID, db: Session = Depends(get_db)):
+    """Get meeting prep stats: since last meeting summary."""
+    # Find last meeting with this person/project
+    q = db.query(MeetingSession).filter(MeetingSession.ended_at != None)
+    if entity_type == "person":
+        q = q.filter(MeetingSession.person_id == entity_id)
+    else:
+        q = q.filter(MeetingSession.project_id == entity_id)
+    last_meeting = q.order_by(MeetingSession.ended_at.desc()).first()
+    since = last_meeting.ended_at if last_meeting else None
+
+    # Count items since last meeting
+    if entity_type == "person":
+        item_q = db.query(CaptureItem).join(CaptureItemPerson).filter(CaptureItemPerson.person_id == entity_id)
+    else:
+        item_q = db.query(CaptureItem).join(CaptureItemProject).filter(CaptureItemProject.project_id == entity_id)
+
+    if since:
+        new_items = item_q.filter(CaptureItem.created_at >= since).count()
+        resolved = item_q.filter(CaptureItem.resolved_at != None, CaptureItem.resolved_at >= since).count()
+    else:
+        new_items = item_q.count()
+        resolved = item_q.filter(CaptureItem.resolved_at != None).count()
+
+    open_count = item_q.filter(CaptureItem.status == ItemStatus.open).count()
+    days_since = (datetime.now(timezone.utc) - since).days if since else None
+
+    return {
+        "last_meeting": since.isoformat() if since else None,
+        "days_since": days_since,
+        "new_items": new_items,
+        "items_resolved": resolved,
+        "open_items": open_count,
+    }
 
 
 @router.patch("/{meeting_id}/end")

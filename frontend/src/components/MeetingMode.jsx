@@ -21,6 +21,7 @@ export default function MeetingMode({ refreshKey, onRefresh }) {
   const [notes, setNotes] = useState('');
   const captureInputRef = useRef(null);
   const mentions = useMentions();
+  const [prep, setPrep] = useState(null);
 
   const isPerson = type === 'person';
 
@@ -37,6 +38,7 @@ export default function MeetingMode({ refreshKey, onRefresh }) {
   useEffect(() => {
     loadData();
     api.getActiveMeeting().then(s => { if (s) setSession(s); });
+    api.getMeetingPrep(type, id).then(setPrep).catch(() => {});
 
     // Auto-end session if user navigates away without clicking End Meeting
     return () => {
@@ -143,6 +145,18 @@ export default function MeetingMode({ refreshKey, onRefresh }) {
           </button>
         </div>
         <p className="text-xs text-zinc-600 mb-3">{entity.role || entity.status || ''}</p>
+
+        {/* Meeting Prep */}
+        {prep && (
+          <div className="mb-3 p-2 glass rounded-lg text-xs text-zinc-400">
+            <span className="text-zinc-500 font-medium">Since last meeting: </span>
+            {prep.days_since !== null ? (
+              <>{prep.days_since}d ago &middot; {prep.items_resolved} resolved &middot; {prep.new_items} new &middot; {prep.open_items} open</>
+            ) : (
+              <>First meeting &middot; {prep.open_items} open items</>
+            )}
+          </div>
+        )}
 
         {/* Structured Profile (person meetings) */}
         {isPerson && entity.profile && (
