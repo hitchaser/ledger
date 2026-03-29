@@ -49,7 +49,7 @@ export default function PersonProfile({ refreshKey, onRefresh }) {
     api.getPersonItems(id, 'open').then(setItems);
     api.getPersonItems(id, 'done').then(setCompletedItems);
     api.getPersonLogs(id).then(setLogs);
-    api.listAllPeople().then(setAllPeople);
+    api.listPeople().then(setAllPeople);
   }, [id, refreshKey]);
 
   const detailsDisplayNameDupe = (() => {

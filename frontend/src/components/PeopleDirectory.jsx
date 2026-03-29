@@ -14,7 +14,6 @@ const LEVEL_COLORS = {
 
 export default function PeopleDirectory({ refreshKey }) {
   const [people, setPeople] = useState([]);
-  const [allPeople, setAllPeople] = useState([]);
   const [search, setSearch] = useState('');
   const [showArchived, setShowArchived] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -24,12 +23,10 @@ export default function PeopleDirectory({ refreshKey }) {
   });
 
   useEffect(() => { api.listPeople(showArchived).then(setPeople).catch(console.error); }, [refreshKey, showArchived]);
-  useEffect(() => { api.listAllPeople().then(setAllPeople).catch(console.error); }, [refreshKey]);
-
   const displayNameDupe = (() => {
     const dn = (form.display_name || form.name).trim().toLowerCase();
     if (!dn) return null;
-    return allPeople.find(p => p.display_name.toLowerCase() === dn);
+    return people.find(p => p.display_name.toLowerCase() === dn);
   })();
 
   const filtered = people.filter(p =>
