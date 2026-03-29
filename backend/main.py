@@ -395,6 +395,7 @@ from routers.meetings import router as meetings_router
 from routers.digest import router as digest_router
 from routers.settings import router as settings_router
 from routers.timeline import router as timeline_router
+from routers.search import router as search_router
 
 app.include_router(auth_router)
 app.include_router(captures_router)
@@ -404,6 +405,7 @@ app.include_router(meetings_router)
 app.include_router(digest_router)
 app.include_router(settings_router)
 app.include_router(timeline_router)
+app.include_router(search_router)
 
 
 # ── WebSocket (auth-protected) ──

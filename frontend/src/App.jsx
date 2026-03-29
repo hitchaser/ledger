@@ -104,7 +104,7 @@ export default function App() {
         <Sidebar collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed(!sidebarCollapsed)} onLogout={handleLogout} />
       )}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <CaptureBox onCapture={refresh} />
+        <CaptureBox onCapture={refresh} onSearch={() => setShowSearch(true)} />
         <main className="flex-1 overflow-y-auto">
           <Routes>
             <Route path="/" element={<Feed refreshKey={refreshKey} onRefresh={refresh} showDigestBanner={showDigestBanner} onDismissDigest={() => { setShowDigestBanner(false); localStorage.setItem('ledger_digest_dismissed', new Date().toISOString().split('T')[0]); }} />} />

@@ -77,6 +77,9 @@ export const api = {
   // Digest
   getDigest: () => request('/digest'),
 
+  // Search
+  universalSearch: (q) => request(`/search?q=${encodeURIComponent(q)}`),
+
   // Timeline
   getTimeline: (days = 7) => request(`/timeline?days=${days}`),
 

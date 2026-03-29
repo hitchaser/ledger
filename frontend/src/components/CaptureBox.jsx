@@ -1,10 +1,10 @@
 import { useState, useRef } from 'react';
-import { Send } from 'lucide-react';
+import { Send, Search } from 'lucide-react';
 import { api } from '../api/client';
 import { useMentions } from '../hooks/useMentions';
 import MentionDropdown from './MentionDropdown';
 
-export default function CaptureBox({ onCapture }) {
+export default function CaptureBox({ onCapture, onSearch }) {
   const [text, setText] = useState('');
   const [loading, setLoading] = useState(false);
   const inputRef = useRef(null);
@@ -75,6 +75,13 @@ export default function CaptureBox({ onCapture }) {
           className="p-2.5 rounded-lg bg-blue-600/80 hover:bg-blue-500 disabled:opacity-30 disabled:cursor-not-allowed transition-all backdrop-blur-sm border border-blue-500/20"
         >
           <Send size={16} className="text-white" />
+        </button>
+        <button
+          onClick={onSearch}
+          className="p-2.5 rounded-lg glass glass-hover text-zinc-500 hover:text-zinc-200 transition-all"
+          title="Search (Ctrl+K)"
+        >
+          <Search size={16} />
         </button>
       </div>
     </div>
