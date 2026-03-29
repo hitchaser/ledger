@@ -120,9 +120,8 @@ export default function MeetingMode({ refreshKey, onRefresh }) {
                 <Copy size={12} /> Copy
               </button>
             )}
-            <button onClick={closeSummary} className="text-xs text-zinc-600 px-3 py-1.5">Close</button>
             <button onClick={closeSummary} className="text-xs bg-blue-600/80 hover:bg-blue-500 text-white rounded px-3 py-1.5 border border-blue-500/20 transition-all">
-              <Save size={12} className="inline mr-1" /> Save & Close
+              Done
             </button>
           </div>
         </div>
