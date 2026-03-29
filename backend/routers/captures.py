@@ -208,6 +208,10 @@ def update_capture(item_id: UUID, body: CaptureUpdate, db: Session = Depends(get
     if body.due_date is not None:
         from dateutil.parser import parse as parse_date
         item.due_date = parse_date(body.due_date) if body.due_date else None
+        # Clear urgency when a specific due date is set — date takes priority
+        if item.due_date:
+            item.manual_urgency = None
+            item.urgency = None
     if body.is_pinned is not None:
         item.is_pinned = body.is_pinned
     if body.recurrence is not None:
