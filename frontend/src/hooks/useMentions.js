@@ -47,7 +47,7 @@ export function useMentions() {
     const results = [];
     for (const p of people) {
       if (p.display_name.toLowerCase().includes(query) || p.name.toLowerCase().includes(query)) {
-        results.push({ type: 'person', id: p.id, name: p.display_name, detail: p.role || '' });
+        results.push({ type: 'person', id: p.id, name: p.display_name, fullName: p.name, detail: p.role || '' });
       }
     }
     for (const p of projects) {

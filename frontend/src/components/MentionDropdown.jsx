@@ -22,6 +22,7 @@ export default function MentionDropdown({ results, selectedIndex, onSelect, posi
             : <FolderKanban size={14} className="text-cyan-400 flex-shrink-0" />
           }
           <span className="font-medium">{item.name}</span>
+          {item.fullName && item.fullName !== item.name && <span className="text-xs text-zinc-500">({item.fullName})</span>}
           {item.detail && <span className="text-xs text-zinc-600">{item.detail}</span>}
           <span className="text-xs text-zinc-700 ml-auto">{item.type}</span>
         </button>
