@@ -56,6 +56,11 @@ export default function ItemCard({ item, onUpdate, compact = false, readonly = f
     onUpdate?.();
   };
 
+  const reopen = async () => {
+    await api.updateCapture(item.id, { status: 'open' });
+    onUpdate?.();
+  };
+
   const startEdit = () => {
     setEditType(item.manual_type || item.effective_type || '');
     setEditUrgency(item.manual_urgency || item.effective_urgency || '');
@@ -80,9 +85,9 @@ export default function ItemCard({ item, onUpdate, compact = false, readonly = f
           </button>
         )}
         {isDone && (
-          <div className="mt-0.5 flex-shrink-0 w-5 h-5 rounded border border-blue-500/30 bg-blue-500/10 flex items-center justify-center">
-            <Check size={12} className="text-blue-400" />
-          </div>
+          <button onClick={reopen} className="mt-0.5 flex-shrink-0 w-5 h-5 rounded border border-blue-500/30 bg-blue-500/10 hover:border-zinc-500 hover:bg-transparent flex items-center justify-center transition-all" title="Reopen">
+            <Check size={12} className="text-blue-400 group-hover:text-zinc-500" />
+          </button>
         )}
         <div className="flex-1 min-w-0">
           <p className={`text-sm leading-relaxed ${isDone ? 'text-zinc-500 line-through' : 'text-zinc-300'}`}>
