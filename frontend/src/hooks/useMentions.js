@@ -1,5 +1,22 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { api } from '../api/client';
+
+const HASHTAG_OPTIONS = [
+  { group: 'urgency', items: [
+    { name: 'today', detail: 'Due today' },
+    { name: 'week', detail: 'Due this week' },
+    { name: 'month', detail: 'Due this month' },
+    { name: 'someday', detail: 'No time pressure' },
+  ]},
+  { group: 'type', items: [
+    { name: 'todo', detail: 'Task for you' },
+    { name: 'followup', detail: 'Check on with someone' },
+    { name: 'reminder', detail: 'Time-sensitive' },
+    { name: 'discussion', detail: 'Share with someone' },
+    { name: 'goal', detail: 'Long-horizon objective' },
+    { name: 'note', detail: 'General info' },
+  ]},
+];
 
 export function useMentions() {
   const peopleRef = useRef([]);
@@ -8,9 +25,9 @@ export function useMentions() {
   const [mentionResults, setMentionResults] = useState([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const mentionStartPos = useRef(null);
+  const mentionPrefix = useRef(null); // '@' or '#'
   const lastMentionState = useRef(false);
 
-  // Load on mount
   useEffect(() => {
     api.listPeople().then(p => { peopleRef.current = p; }).catch(() => {});
     api.listProjects().then(p => { projectsRef.current = p; }).catch(() => {});
@@ -25,35 +42,74 @@ export function useMentions() {
     projectsRef.current = pr;
   }, []);
 
-  const buildResults = useCallback((query) => {
+  const buildAtResults = useCallback((query) => {
     const results = [];
     for (const p of peopleRef.current) {
       if (p.display_name.toLowerCase().includes(query) || p.name.toLowerCase().includes(query)) {
-        results.push({ type: 'person', id: p.id, name: p.display_name, fullName: p.name, detail: p.role || '' });
+        results.push({ type: 'person', id: p.id, name: p.display_name, fullName: p.name, detail: p.role || '', prefix: '@' });
       }
     }
     for (const p of projectsRef.current) {
       if (p.name.toLowerCase().includes(query) || (p.short_code || '').toLowerCase().includes(query)) {
-        results.push({ type: 'project', id: p.id, name: p.name, detail: p.short_code || '' });
+        results.push({ type: 'project', id: p.id, name: p.name, detail: p.short_code || '', prefix: '@' });
       }
     }
     return results.slice(0, 8);
   }, []);
 
-  const updateMention = useCallback(async (text, cursorPos) => {
-    const before = text.slice(0, cursorPos);
-    const atIndex = before.lastIndexOf('@');
-
-    if (atIndex === -1 || (atIndex > 0 && before[atIndex - 1] !== ' ' && before[atIndex - 1] !== '\n')) {
-      if (atIndex === -1 || (atIndex > 0 && before[atIndex - 1] !== ' ')) {
-        setMentionQuery(null);
-        setMentionResults([]);
-        lastMentionState.current = false;
-        return;
+  const buildHashResults = useCallback((query) => {
+    const results = [];
+    // Hashtag options (urgency + type)
+    for (const group of HASHTAG_OPTIONS) {
+      for (const item of group.items) {
+        if (item.name.includes(query)) {
+          results.push({ type: group.group, id: item.name, name: item.name, detail: item.detail, prefix: '#' });
+        }
       }
     }
+    // Also match people/projects via #
+    for (const p of peopleRef.current) {
+      if (p.display_name.toLowerCase().includes(query) || p.name.toLowerCase().includes(query)) {
+        results.push({ type: 'person', id: p.id, name: p.display_name, fullName: p.name, detail: p.role || '', prefix: '#' });
+      }
+    }
+    for (const p of projectsRef.current) {
+      if (p.name.toLowerCase().includes(query) || (p.short_code || '').toLowerCase().includes(query)) {
+        results.push({ type: 'project', id: p.id, name: p.name, detail: p.short_code || '', prefix: '#' });
+      }
+    }
+    return results.slice(0, 10);
+  }, []);
 
-    const query = before.slice(atIndex + 1).toLowerCase();
+  const updateMention = useCallback(async (text, cursorPos) => {
+    const before = text.slice(0, cursorPos);
+
+    // Check for @ or # trigger
+    let triggerIndex = -1;
+    let prefix = null;
+    const atIndex = before.lastIndexOf('@');
+    const hashIndex = before.lastIndexOf('#');
+
+    // Pick the closest trigger to cursor
+    if (atIndex > hashIndex) {
+      triggerIndex = atIndex;
+      prefix = '@';
+    } else if (hashIndex > atIndex) {
+      triggerIndex = hashIndex;
+      prefix = '#';
+    } else if (atIndex === hashIndex && atIndex >= 0) {
+      triggerIndex = atIndex;
+      prefix = '@';
+    }
+
+    if (triggerIndex === -1 || (triggerIndex > 0 && before[triggerIndex - 1] !== ' ' && before[triggerIndex - 1] !== '\n' && triggerIndex !== 0)) {
+      setMentionQuery(null);
+      setMentionResults([]);
+      lastMentionState.current = false;
+      return;
+    }
+
+    const query = before.slice(triggerIndex + 1).toLowerCase();
 
     if (query.includes(' ')) {
       setMentionQuery(null);
@@ -62,26 +118,28 @@ export function useMentions() {
       return;
     }
 
-    // Refresh lists when @ is first typed
     if (!lastMentionState.current) {
       await refreshLists();
       lastMentionState.current = true;
     }
 
-    mentionStartPos.current = atIndex;
+    mentionStartPos.current = triggerIndex;
+    mentionPrefix.current = prefix;
     setMentionQuery(query);
     setSelectedIndex(0);
-    setMentionResults(buildResults(query));
-  }, [refreshLists, buildResults]);
+    setMentionResults(prefix === '@' ? buildAtResults(query) : buildHashResults(query));
+  }, [refreshLists, buildAtResults, buildHashResults]);
 
   const selectMention = useCallback((text, item) => {
-    const atIndex = mentionStartPos.current;
-    if (atIndex === null) return text;
-    const before = text.slice(0, atIndex);
-    const afterAt = text.slice(atIndex + 1);
-    const spaceIdx = afterAt.indexOf(' ');
-    const after = spaceIdx >= 0 ? afterAt.slice(spaceIdx) : '';
-    const newText = `${before}@${item.name.replace(/\s+/g, '')}${after ? after : ' '}`;
+    const triggerIndex = mentionStartPos.current;
+    const prefix = mentionPrefix.current || '@';
+    if (triggerIndex === null) return text;
+    const before = text.slice(0, triggerIndex);
+    const afterTrigger = text.slice(triggerIndex + 1);
+    const spaceIdx = afterTrigger.indexOf(' ');
+    const after = spaceIdx >= 0 ? afterTrigger.slice(spaceIdx) : '';
+    const insertName = item.prefix === '#' ? item.name.replace(/\s+/g, '') : item.name.replace(/\s+/g, '');
+    const newText = `${before}${prefix}${insertName}${after ? after : ' '}`;
     setMentionQuery(null);
     setMentionResults([]);
     lastMentionState.current = false;

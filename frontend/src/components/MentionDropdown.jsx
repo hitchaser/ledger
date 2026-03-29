@@ -1,4 +1,11 @@
-import { User, FolderKanban } from 'lucide-react';
+import { User, FolderKanban, Clock, Tag } from 'lucide-react';
+
+const ICONS = {
+  person: <User size={14} className="text-indigo-400 flex-shrink-0" />,
+  project: <FolderKanban size={14} className="text-cyan-400 flex-shrink-0" />,
+  urgency: <Clock size={14} className="text-amber-400 flex-shrink-0" />,
+  type: <Tag size={14} className="text-blue-400 flex-shrink-0" />,
+};
 
 export default function MentionDropdown({ results, selectedIndex, onSelect, position = 'below' }) {
   if (!results || results.length === 0) return null;
@@ -17,11 +24,8 @@ export default function MentionDropdown({ results, selectedIndex, onSelect, posi
             i === selectedIndex ? 'bg-blue-500/15 text-zinc-200' : 'text-zinc-400 hover:bg-white/[0.04]'
           }`}
         >
-          {item.type === 'person'
-            ? <User size={14} className="text-indigo-400 flex-shrink-0" />
-            : <FolderKanban size={14} className="text-cyan-400 flex-shrink-0" />
-          }
-          <span className="font-medium">{item.name}</span>
+          {ICONS[item.type] || ICONS.type}
+          <span className="font-medium">{item.prefix === '#' ? `#${item.name}` : item.name}</span>
           {item.fullName && item.fullName !== item.name && <span className="text-xs text-zinc-500">({item.fullName})</span>}
           {item.detail && <span className="text-xs text-zinc-600">{item.detail}</span>}
           <span className="text-xs text-zinc-700 ml-auto">{item.type}</span>
