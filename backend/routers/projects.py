@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import Project as ProjectModel, CaptureItem, CaptureItemProject, ProfileLog, ItemStatus
+from models import Project as ProjectModel, Person, PersonProject, CaptureItem, CaptureItemProject, ProfileLog, ItemStatus
 from schemas import ProjectCreate, ProjectUpdate, ProjectResponse, ProfileLogResponse
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
@@ -20,6 +20,7 @@ def project_response(p: ProjectModel, db: Session) -> dict:
         "created_at": p.created_at, "updated_at": p.updated_at,
         "is_archived": p.is_archived, "context_notes": p.context_notes or "",
         "open_item_count": count,
+        "people": [{"id": pe.id, "display_name": pe.display_name, "avatar": pe.avatar, "role": pe.role} for pe in (p.people or []) if not pe.is_archived],
     }
 
 
@@ -83,6 +84,24 @@ def delete_project(project_id: UUID, db: Session = Depends(get_db)):
     db.query(ProfileLog).filter(ProfileLog.project_id == project_id).delete()
     db.delete(p)
     db.commit()
+    return {"ok": True}
+
+
+@router.post("/{project_id}/people/{person_id}")
+def link_project_person(project_id: UUID, person_id: UUID, db: Session = Depends(get_db)):
+    existing = db.query(PersonProject).filter_by(person_id=person_id, project_id=project_id).first()
+    if not existing:
+        db.add(PersonProject(person_id=person_id, project_id=project_id))
+        db.commit()
+    return {"ok": True}
+
+
+@router.delete("/{project_id}/people/{person_id}")
+def unlink_project_person(project_id: UUID, person_id: UUID, db: Session = Depends(get_db)):
+    link = db.query(PersonProject).filter_by(person_id=person_id, project_id=project_id).first()
+    if link:
+        db.delete(link)
+        db.commit()
     return {"ok": True}
 
 

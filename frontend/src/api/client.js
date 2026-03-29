@@ -40,6 +40,8 @@ export const api = {
   getPersonItems: (id, status = 'open') => request(`/people/${id}/items?status=${status}`),
   getPersonLogs: (id) => request(`/people/${id}/logs`),
   deletePerson: (id) => request(`/people/${id}`, { method: 'DELETE' }),
+  linkPersonProject: (personId, projectId) => request(`/people/${personId}/projects/${projectId}`, { method: 'POST' }),
+  unlinkPersonProject: (personId, projectId) => request(`/people/${personId}/projects/${projectId}`, { method: 'DELETE' }),
 
   // Projects
   listProjects: (includeArchived = false) => request(`/projects${includeArchived ? '?include_archived=true' : ''}`),
@@ -49,6 +51,8 @@ export const api = {
   getProjectItems: (id, status = 'open') => request(`/projects/${id}/items?status=${status}`),
   getProjectLogs: (id) => request(`/projects/${id}/logs`),
   deleteProject: (id) => request(`/projects/${id}`, { method: 'DELETE' }),
+  linkProjectPerson: (projectId, personId) => request(`/projects/${projectId}/people/${personId}`, { method: 'POST' }),
+  unlinkProjectPerson: (projectId, personId) => request(`/projects/${projectId}/people/${personId}`, { method: 'DELETE' }),
 
   // Meetings
   startMeeting: (data) => request('/meetings', { method: 'POST', body: JSON.stringify(data) }),

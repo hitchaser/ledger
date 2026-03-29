@@ -3,7 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import ItemCard from './ItemCard';
 import AvatarUpload from './AvatarUpload';
-import { ArrowLeft, Play, Edit3, Save, Plus, Settings, X, Archive, ArchiveRestore, Trash2 } from 'lucide-react';
+import { ArrowLeft, Play, Edit3, Save, Plus, Settings, X, Archive, ArchiveRestore, Trash2, FolderKanban } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 const DEFAULT_PROFILE = {
   spouse: '', anniversary: '', children: [], pets: [],
@@ -40,6 +41,8 @@ export default function PersonProfile({ refreshKey, onRefresh }) {
   const [allPeople, setAllPeople] = useState([]);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [quickNote, setQuickNote] = useState('');
+  const [availableProjects, setAvailableProjects] = useState([]);
+  const [showAddProject, setShowAddProject] = useState(false);
 
   useEffect(() => {
     api.getPerson(id).then(p => {
@@ -51,6 +54,7 @@ export default function PersonProfile({ refreshKey, onRefresh }) {
     api.getPersonItems(id, 'done').then(setCompletedItems);
     api.getPersonLogs(id).then(setLogs);
     api.listPeople().then(setAllPeople);
+    api.listProjects().then(setAvailableProjects);
   }, [id, refreshKey]);
 
   const detailsDisplayNameDupe = (() => {
@@ -274,6 +278,41 @@ export default function PersonProfile({ refreshKey, onRefresh }) {
                   <pre className="text-sm text-zinc-400 whitespace-pre-wrap font-sans mt-1">{profile.general}</pre>
                 </div>
               </>
+            )}
+          </div>
+        )}
+
+        {/* Assigned Projects */}
+        {!editingProfile && (
+          <div className="mt-3 pt-2 border-t border-white/[0.04]">
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-xs text-zinc-600 flex items-center gap-1"><FolderKanban size={12} /> Projects</span>
+              <button onClick={() => setShowAddProject(!showAddProject)} className="text-xs text-zinc-600 hover:text-zinc-300 transition-colors">
+                <Plus size={14} />
+              </button>
+            </div>
+            {person.projects?.length > 0 ? (
+              <div className="flex flex-wrap gap-1.5">
+                {person.projects.map(pr => (
+                  <div key={pr.id} className="badge bg-cyan-500/10 text-cyan-400 border border-cyan-500/15 flex items-center gap-1">
+                    <Link to={`/projects/${pr.id}`} className="hover:text-cyan-300">{pr.short_code || pr.name}</Link>
+                    <button onClick={async () => { await api.unlinkPersonProject(id, pr.id); const u = await api.getPerson(id); setPerson(u); }}
+                      className="text-cyan-600 hover:text-cyan-300 ml-0.5"><X size={10} /></button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <span className="text-xs text-zinc-700 italic">No projects assigned</span>
+            )}
+            {showAddProject && (
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {availableProjects.filter(pr => !person.projects?.some(pp => pp.id === pr.id)).map(pr => (
+                  <button key={pr.id} onClick={async () => { await api.linkPersonProject(id, pr.id); const u = await api.getPerson(id); setPerson(u); setShowAddProject(false); }}
+                    className="badge glass glass-hover text-zinc-400 hover:text-zinc-200 cursor-pointer">
+                    + {pr.short_code || pr.name}
+                  </button>
+                ))}
+              </div>
             )}
           </div>
         )}

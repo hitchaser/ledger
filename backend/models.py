@@ -68,6 +68,12 @@ class LogType(str, enum.Enum):
 
 # ── Junction Tables ──
 
+class PersonProject(Base):
+    __tablename__ = "person_projects"
+    person_id = Column(UUID(as_uuid=True), ForeignKey("people.id", ondelete="CASCADE"), primary_key=True)
+    project_id = Column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), primary_key=True)
+
+
 class CaptureItemPerson(Base):
     __tablename__ = "capture_item_people"
     capture_item_id = Column(UUID(as_uuid=True), ForeignKey("capture_items.id", ondelete="CASCADE"), primary_key=True)
@@ -140,6 +146,7 @@ class Person(Base):
 
     capture_items = relationship("CaptureItem", secondary="capture_item_people", back_populates="linked_people")
     profile_logs = relationship("ProfileLog", back_populates="person", foreign_keys="ProfileLog.person_id")
+    projects = relationship("Project", secondary="person_projects", back_populates="people")
 
 
 class Project(Base):
@@ -156,6 +163,7 @@ class Project(Base):
 
     capture_items = relationship("CaptureItem", secondary="capture_item_projects", back_populates="linked_projects")
     profile_logs = relationship("ProfileLog", back_populates="project", foreign_keys="ProfileLog.project_id")
+    people = relationship("Person", secondary="person_projects", back_populates="projects")
 
 
 class MeetingSession(Base):

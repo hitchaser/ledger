@@ -2,7 +2,9 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import ItemCard from './ItemCard';
-import { ArrowLeft, Play, Edit3, Save, Plus, Settings, X, Archive, ArchiveRestore, Trash2 } from 'lucide-react';
+import { ArrowLeft, Play, Edit3, Save, Plus, Settings, X, Archive, ArchiveRestore, Trash2, Users } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import Avatar from './Avatar';
 
 export default function ProjectCard({ refreshKey, onRefresh }) {
   const { id } = useParams();
@@ -16,6 +18,8 @@ export default function ProjectCard({ refreshKey, onRefresh }) {
   const [notes, setNotes] = useState('');
   const [addNote, setAddNote] = useState('');
   const [editingDetails, setEditingDetails] = useState(false);
+  const [availablePeople, setAvailablePeople] = useState([]);
+  const [showAddPerson, setShowAddPerson] = useState(false);
   const [detailsForm, setDetailsForm] = useState({ name: '', short_code: '', status: '' });
   const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -28,6 +32,7 @@ export default function ProjectCard({ refreshKey, onRefresh }) {
     api.getProjectItems(id, 'open').then(setItems);
     api.getProjectItems(id, 'done').then(setCompletedItems);
     api.getProjectLogs(id).then(setLogs);
+    api.listPeople().then(setAvailablePeople);
   }, [id, refreshKey]);
 
   const saveDetails = async () => {
@@ -169,6 +174,42 @@ export default function ProjectCard({ refreshKey, onRefresh }) {
             className="flex-1 glass-input rounded px-2 py-1 text-xs text-zinc-300 outline-none" />
           <button onClick={addContextNote} className="text-xs text-blue-400 hover:text-blue-300 transition-colors"><Plus size={14} /></button>
         </div>
+      </div>
+
+      {/* Team Members */}
+      <div className="mb-4 p-3 glass rounded-lg">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-xs text-zinc-500 font-medium uppercase tracking-wide flex items-center gap-1"><Users size={12} /> Team</span>
+          <button onClick={() => setShowAddPerson(!showAddPerson)} className="text-xs text-zinc-600 hover:text-zinc-300 transition-colors">
+            <Plus size={14} />
+          </button>
+        </div>
+        {project.people?.length > 0 ? (
+          <div className="flex flex-wrap gap-2">
+            {project.people.map(pe => (
+              <div key={pe.id} className="flex items-center gap-1.5 badge bg-indigo-500/10 text-indigo-400 border border-indigo-500/15">
+                <Avatar src={pe.avatar} name={pe.display_name} size="xs" />
+                <Link to={`/people/${pe.id}`} className="hover:text-indigo-300">{pe.display_name}</Link>
+                {pe.role && <span className="text-xs text-zinc-600">{pe.role}</span>}
+                <button onClick={async () => { await api.unlinkProjectPerson(id, pe.id); const u = await api.getProject(id); setProject(u); }}
+                  className="text-indigo-600 hover:text-indigo-300 ml-0.5"><X size={10} /></button>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <span className="text-xs text-zinc-700 italic">No team members assigned</span>
+        )}
+        {showAddPerson && (
+          <div className="flex flex-wrap gap-1.5 mt-2">
+            {availablePeople.filter(pe => !project.people?.some(pp => pp.id === pe.id)).map(pe => (
+              <button key={pe.id} onClick={async () => { await api.linkProjectPerson(id, pe.id); const u = await api.getProject(id); setProject(u); setShowAddPerson(false); }}
+                className="badge glass glass-hover text-zinc-400 hover:text-zinc-200 cursor-pointer flex items-center gap-1">
+                <Avatar src={pe.avatar} name={pe.display_name} size="xs" />
+                + {pe.display_name}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="flex gap-4 border-b border-white/[0.06] mb-3">
