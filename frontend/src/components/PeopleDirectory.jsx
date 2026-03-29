@@ -14,6 +14,7 @@ const LEVEL_COLORS = {
 
 export default function PeopleDirectory({ refreshKey }) {
   const [people, setPeople] = useState([]);
+  const [allPeople, setAllPeople] = useState([]);
   const [search, setSearch] = useState('');
   const [showArchived, setShowArchived] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -23,6 +24,13 @@ export default function PeopleDirectory({ refreshKey }) {
   });
 
   useEffect(() => { api.listPeople(showArchived).then(setPeople).catch(console.error); }, [refreshKey, showArchived]);
+  useEffect(() => { api.listAllPeople().then(setAllPeople).catch(console.error); }, [refreshKey]);
+
+  const displayNameDupe = (() => {
+    const dn = (form.display_name || form.name).trim().toLowerCase();
+    if (!dn) return null;
+    return allPeople.find(p => p.display_name.toLowerCase() === dn);
+  })();
 
   const filtered = people.filter(p =>
     p.display_name.toLowerCase().includes(search.toLowerCase()) ||
@@ -89,6 +97,11 @@ export default function PeopleDirectory({ refreshKey }) {
             className="col-span-2 glass-input rounded px-3 py-1.5 text-sm text-zinc-200 outline-none" />
           <textarea placeholder="General notes..." value={form.profile.general} onChange={e => setForm({...form, profile: {...form.profile, general: e.target.value}})}
             className="col-span-2 glass-input rounded px-3 py-1.5 text-sm text-zinc-200 outline-none resize-none h-16" />
+          {displayNameDupe && (
+            <div className="col-span-2 p-2 rounded bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs">
+              Display name "{form.display_name || form.name}" is already used by <strong>{displayNameDupe.name}</strong>. Consider a unique name (e.g. first name + last initial) to avoid linking confusion.
+            </div>
+          )}
           <div className="col-span-2 flex justify-end gap-2">
             <button type="button" onClick={() => setShowForm(false)} className="text-xs text-zinc-600 px-3 py-1">Cancel</button>
             <button type="submit" className="text-xs bg-blue-600/80 hover:bg-blue-500 text-white rounded px-3 py-1.5 border border-blue-500/20 transition-all">Create</button>

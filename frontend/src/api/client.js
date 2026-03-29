@@ -33,6 +33,7 @@ export const api = {
 
   // People
   listPeople: (includeArchived = false) => request(`/people${includeArchived ? '?include_archived=true' : ''}`),
+  listAllPeople: () => request('/people?include_archived=true'),
   createPerson: (data) => request('/people', { method: 'POST', body: JSON.stringify(data) }),
   getPerson: (id) => request(`/people/${id}`),
   updatePerson: (id, data) => request(`/people/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),

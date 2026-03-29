@@ -37,6 +37,7 @@ export default function PersonProfile({ refreshKey, onRefresh }) {
   const [detailsForm, setDetailsForm] = useState({ name: '', display_name: '', role: '', reporting_level: '', email: '' });
   const [editingProfile, setEditingProfile] = useState(false);
   const [profileForm, setProfileForm] = useState({ ...DEFAULT_PROFILE });
+  const [allPeople, setAllPeople] = useState([]);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   useEffect(() => {
@@ -48,7 +49,14 @@ export default function PersonProfile({ refreshKey, onRefresh }) {
     api.getPersonItems(id, 'open').then(setItems);
     api.getPersonItems(id, 'done').then(setCompletedItems);
     api.getPersonLogs(id).then(setLogs);
+    api.listAllPeople().then(setAllPeople);
   }, [id, refreshKey]);
+
+  const detailsDisplayNameDupe = (() => {
+    const dn = detailsForm.display_name.trim().toLowerCase();
+    if (!dn) return null;
+    return allPeople.find(p => p.display_name.toLowerCase() === dn && p.id !== id);
+  })();
 
   const profile = person?.profile ? { ...DEFAULT_PROFILE, ...person.profile } : DEFAULT_PROFILE;
 
@@ -185,6 +193,11 @@ export default function PersonProfile({ refreshKey, onRefresh }) {
               <input value={detailsForm.email} onChange={e => setDetailsForm({...detailsForm, email: e.target.value})}
                 className="w-full glass-input rounded px-3 py-1.5 text-sm text-zinc-200 outline-none" />
             </div>
+            {detailsDisplayNameDupe && (
+              <div className="col-span-2 p-2 rounded bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs">
+                Display name "{detailsForm.display_name}" is already used by <strong>{detailsDisplayNameDupe.name}</strong>. Consider a unique name to avoid linking confusion.
+              </div>
+            )}
             <div className="col-span-2 flex justify-end gap-2 mt-1">
               <button onClick={() => setEditingDetails(false)} className="text-xs text-zinc-600 px-3 py-1">Cancel</button>
               <button onClick={saveDetails} className="text-xs bg-blue-600/80 hover:bg-blue-500 text-white rounded px-3 py-1.5 border border-blue-500/20 transition-all">Save Changes</button>
