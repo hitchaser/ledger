@@ -14,15 +14,18 @@ const LEVEL_COLORS = {
 
 export default function PeopleDirectory({ refreshKey }) {
   const [people, setPeople] = useState([]);
+  const [projects, setProjects] = useState([]);
   const [search, setSearch] = useState('');
   const [showArchived, setShowArchived] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({
     name: '', display_name: '', role: '', reporting_level: 'employee',
-    profile: { spouse: '', anniversary: '', children: '', pets: '', birthday: '', hobbies: '', location: '', general: '' }
+    profile: { spouse: '', anniversary: '', children: '', pets: '', birthday: '', hobbies: '', location: '', general: '' },
+    selectedProjectIds: [],
   });
 
   useEffect(() => { api.listPeople(showArchived).then(setPeople).catch(console.error); }, [refreshKey, showArchived]);
+  useEffect(() => { api.listProjects().then(setProjects).catch(console.error); }, []);
   const displayNameDupe = (() => {
     const dn = (form.display_name || form.name).trim().toLowerCase();
     if (!dn) return null;
@@ -42,11 +45,17 @@ export default function PeopleDirectory({ refreshKey }) {
       children: form.profile.children ? form.profile.children.split(',').map(s => s.trim()).filter(Boolean) : [],
       pets: form.profile.pets ? form.profile.pets.split(',').map(s => s.trim()).filter(Boolean) : [],
     };
-    await api.createPerson({ ...form, display_name: form.display_name || form.name, profile: profileData });
+    const { selectedProjectIds, ...personData } = form;
+    const newPerson = await api.createPerson({ ...personData, display_name: form.display_name || form.name, profile: profileData });
+    // Link selected projects
+    for (const projId of selectedProjectIds) {
+      await api.linkPersonProject(newPerson.id, projId);
+    }
     setForm({ name: '', display_name: '', role: '', reporting_level: 'employee',
-      profile: { spouse: '', anniversary: '', children: '', pets: '', birthday: '', hobbies: '', location: '', general: '' } });
+      profile: { spouse: '', anniversary: '', children: '', pets: '', birthday: '', hobbies: '', location: '', general: '' },
+      selectedProjectIds: [] });
     setShowForm(false);
-    api.listPeople().then(setPeople);
+    api.listPeople(showArchived).then(setPeople);
   };
 
   return (
@@ -94,6 +103,29 @@ export default function PeopleDirectory({ refreshKey }) {
             className="col-span-2 glass-input rounded px-3 py-1.5 text-sm text-zinc-200 outline-none" />
           <textarea placeholder="General notes..." value={form.profile.general} onChange={e => setForm({...form, profile: {...form.profile, general: e.target.value}})}
             className="col-span-2 glass-input rounded px-3 py-1.5 text-sm text-zinc-200 outline-none resize-none h-16" />
+          {projects.length > 0 && (
+            <div className="col-span-2">
+              <label className="text-xs text-zinc-600 mb-1 block">Projects</label>
+              <div className="flex flex-wrap gap-1.5">
+                {projects.map(pr => {
+                  const selected = form.selectedProjectIds.includes(pr.id);
+                  return (
+                    <button key={pr.id} type="button"
+                      onClick={() => setForm({...form, selectedProjectIds: selected
+                        ? form.selectedProjectIds.filter(pid => pid !== pr.id)
+                        : [...form.selectedProjectIds, pr.id]
+                      })}
+                      className={`badge cursor-pointer transition-all ${selected
+                        ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'
+                        : 'glass text-zinc-500 hover:text-zinc-300'
+                      }`}>
+                      {pr.short_code || pr.name}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
           {displayNameDupe && (
             <div className="col-span-2 p-2 rounded bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs">
               Display name "{form.display_name || form.name}" is already used by <strong>{displayNameDupe.name}</strong>. Consider a unique name (e.g. first name + last initial) to avoid linking confusion.

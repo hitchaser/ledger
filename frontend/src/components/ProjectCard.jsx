@@ -190,7 +190,6 @@ export default function ProjectCard({ refreshKey, onRefresh }) {
               <div key={pe.id} className="flex items-center gap-1.5 badge bg-indigo-500/10 text-indigo-400 border border-indigo-500/15">
                 <Avatar src={pe.avatar} name={pe.display_name} size="xs" />
                 <Link to={`/people/${pe.id}`} className="hover:text-indigo-300">{pe.display_name}</Link>
-                {pe.role && <span className="text-xs text-zinc-600">{pe.role}</span>}
                 <button onClick={async () => { await api.unlinkProjectPerson(id, pe.id); const u = await api.getProject(id); setProject(u); }}
                   className="text-indigo-600 hover:text-indigo-300 ml-0.5"><X size={10} /></button>
               </div>

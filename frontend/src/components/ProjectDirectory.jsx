@@ -16,9 +16,11 @@ export default function ProjectDirectory({ refreshKey }) {
   const [statusFilter, setStatusFilter] = useState('all');
   const [showArchived, setShowArchived] = useState(false);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ name: '', short_code: '', context_notes: '' });
+  const [form, setForm] = useState({ name: '', short_code: '', context_notes: '', selectedPeopleIds: [] });
+  const [people, setPeople] = useState([]);
 
   useEffect(() => { api.listProjects(showArchived).then(setProjects).catch(console.error); }, [refreshKey, showArchived]);
+  useEffect(() => { api.listPeople().then(setPeople).catch(console.error); }, []);
 
   const filtered = projects.filter(p => {
     const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -30,10 +32,14 @@ export default function ProjectDirectory({ refreshKey }) {
   const handleCreate = async (e) => {
     e.preventDefault();
     if (!form.name.trim()) return;
-    await api.createProject(form);
-    setForm({ name: '', short_code: '', context_notes: '' });
+    const { selectedPeopleIds, ...projectData } = form;
+    const newProject = await api.createProject(projectData);
+    for (const personId of selectedPeopleIds) {
+      await api.linkProjectPerson(newProject.id, personId);
+    }
+    setForm({ name: '', short_code: '', context_notes: '', selectedPeopleIds: [] });
     setShowForm(false);
-    api.listProjects().then(setProjects);
+    api.listProjects(showArchived).then(setProjects);
   };
 
   return (
@@ -54,6 +60,29 @@ export default function ProjectDirectory({ refreshKey }) {
             className="glass-input rounded px-3 py-1.5 text-sm text-zinc-200 outline-none" />
           <textarea placeholder="Context notes..." value={form.context_notes} onChange={e => setForm({...form, context_notes: e.target.value})}
             className="col-span-2 glass-input rounded px-3 py-1.5 text-sm text-zinc-200 outline-none resize-none h-16" />
+          {people.length > 0 && (
+            <div className="col-span-2">
+              <label className="text-xs text-zinc-600 mb-1 block">Team Members</label>
+              <div className="flex flex-wrap gap-1.5">
+                {people.map(pe => {
+                  const selected = form.selectedPeopleIds.includes(pe.id);
+                  return (
+                    <button key={pe.id} type="button"
+                      onClick={() => setForm({...form, selectedPeopleIds: selected
+                        ? form.selectedPeopleIds.filter(pid => pid !== pe.id)
+                        : [...form.selectedPeopleIds, pe.id]
+                      })}
+                      className={`badge cursor-pointer transition-all ${selected
+                        ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30'
+                        : 'glass text-zinc-500 hover:text-zinc-300'
+                      }`}>
+                      {pe.display_name}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
           <div className="col-span-2 flex justify-end gap-2">
             <button type="button" onClick={() => setShowForm(false)} className="text-xs text-zinc-600 px-3 py-1">Cancel</button>
             <button type="submit" className="text-xs bg-blue-600/80 hover:bg-blue-500 text-white rounded px-3 py-1.5 border border-blue-500/20 transition-all">Create</button>
