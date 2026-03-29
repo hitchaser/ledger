@@ -3,6 +3,8 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, func, or_
 
+from sqlalchemy import case
+
 from database import get_db
 from models import CaptureItem, Person, CaptureItemPerson, CaptureItemProject, ItemStatus, Urgency, ItemType
 from routers.captures import item_to_response
@@ -10,11 +12,20 @@ from routers.captures import item_to_response
 router = APIRouter(prefix="/api/digest", tags=["digest"])
 
 
+def _effective_urgency():
+    """SQL expression for effective urgency: manual_urgency if set, else urgency."""
+    return case(
+        (CaptureItem.manual_urgency != None, CaptureItem.manual_urgency),
+        else_=CaptureItem.urgency,
+    )
+
+
 @router.get("")
 def get_digest(db: Session = Depends(get_db)):
     now = datetime.now(timezone.utc)
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     today_end = today_start + timedelta(days=1)
+    eff_urgency = _effective_urgency()
 
     # Overdue: items with due_date in the past (only date-based, not urgency-based)
     overdue = db.query(CaptureItem).filter(
@@ -23,12 +34,12 @@ def get_digest(db: Session = Depends(get_db)):
         CaptureItem.due_date < today_start,
     ).order_by(CaptureItem.due_date.asc()).all()
 
-    # Today: due_date is today OR urgency=today (regardless of creation date)
+    # Today: due_date is today OR effective urgency=today (regardless of creation date)
     today_items = db.query(CaptureItem).filter(
         CaptureItem.status == ItemStatus.open,
         or_(
             and_(CaptureItem.due_date != None, CaptureItem.due_date >= today_start, CaptureItem.due_date < today_end),
-            and_(CaptureItem.due_date == None, CaptureItem.urgency == Urgency.today),
+            and_(CaptureItem.due_date == None, eff_urgency == Urgency.today),
         ),
     ).order_by(CaptureItem.due_date.asc().nullslast(), CaptureItem.created_at).all()
 
@@ -41,10 +52,10 @@ def get_digest(db: Session = Depends(get_db)):
         CaptureItem.due_date < week_end,
     ).order_by(CaptureItem.due_date.asc()).all()
 
-    # This week (urgency-based, no due date)
+    # This week (effective urgency-based, no due date)
     this_week = db.query(CaptureItem).filter(
         CaptureItem.status == ItemStatus.open,
-        CaptureItem.urgency == Urgency.this_week,
+        eff_urgency == Urgency.this_week,
         CaptureItem.due_date == None,
     ).order_by(CaptureItem.created_at).all()
 
