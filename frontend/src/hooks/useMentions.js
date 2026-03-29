@@ -9,8 +9,15 @@ export function useMentions() {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const mentionStartPos = useRef(null);
 
-  // Load people and projects once
+  // Load people and projects on mount
   useEffect(() => {
+    api.listPeople().then(setPeople).catch(() => {});
+    api.listProjects().then(setProjects).catch(() => {});
+  }, []);
+
+  // Refresh lists when @ is first triggered
+  const lastMentionState = useRef(false);
+  const refreshLists = useCallback(() => {
     api.listPeople().then(setPeople).catch(() => {});
     api.listProjects().then(setProjects).catch(() => {});
   }, []);
@@ -21,22 +28,27 @@ export function useMentions() {
     const atIndex = before.lastIndexOf('@');
 
     if (atIndex === -1 || (atIndex > 0 && before[atIndex - 1] !== ' ' && before[atIndex - 1] !== '\n')) {
-      // No @ or @ is part of a word (like email)
-      // Allow @ at position 0 or after a space
       if (atIndex === -1 || (atIndex > 0 && before[atIndex - 1] !== ' ')) {
         setMentionQuery(null);
         setMentionResults([]);
+        lastMentionState.current = false;
         return;
       }
     }
 
     const query = before.slice(atIndex + 1).toLowerCase();
 
-    // If there's a space after the query started, close the mention
     if (query.includes(' ')) {
       setMentionQuery(null);
       setMentionResults([]);
+      lastMentionState.current = false;
       return;
+    }
+
+    // Refresh people/projects when @ is first typed
+    if (!lastMentionState.current) {
+      refreshLists();
+      lastMentionState.current = true;
     }
 
     mentionStartPos.current = atIndex;
