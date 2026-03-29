@@ -2,28 +2,45 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { api } from '../api/client';
 
 export function useMentions() {
-  const [people, setPeople] = useState([]);
-  const [projects, setProjects] = useState([]);
-  const [mentionQuery, setMentionQuery] = useState(null); // null = not mentioning
+  const peopleRef = useRef([]);
+  const projectsRef = useRef([]);
+  const [mentionQuery, setMentionQuery] = useState(null);
   const [mentionResults, setMentionResults] = useState([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const mentionStartPos = useRef(null);
-
-  // Load people and projects on mount
-  useEffect(() => {
-    api.listPeople().then(setPeople).catch(() => {});
-    api.listProjects().then(setProjects).catch(() => {});
-  }, []);
-
-  // Refresh lists when @ is first triggered
   const lastMentionState = useRef(false);
-  const refreshLists = useCallback(() => {
-    api.listPeople().then(setPeople).catch(() => {});
-    api.listProjects().then(setProjects).catch(() => {});
+
+  // Load on mount
+  useEffect(() => {
+    api.listPeople().then(p => { peopleRef.current = p; }).catch(() => {});
+    api.listProjects().then(p => { projectsRef.current = p; }).catch(() => {});
   }, []);
 
-  const updateMention = useCallback((text, cursorPos) => {
-    // Find the @ symbol before the cursor
+  const refreshLists = useCallback(async () => {
+    const [p, pr] = await Promise.all([
+      api.listPeople().catch(() => []),
+      api.listProjects().catch(() => []),
+    ]);
+    peopleRef.current = p;
+    projectsRef.current = pr;
+  }, []);
+
+  const buildResults = useCallback((query) => {
+    const results = [];
+    for (const p of peopleRef.current) {
+      if (p.display_name.toLowerCase().includes(query) || p.name.toLowerCase().includes(query)) {
+        results.push({ type: 'person', id: p.id, name: p.display_name, fullName: p.name, detail: p.role || '' });
+      }
+    }
+    for (const p of projectsRef.current) {
+      if (p.name.toLowerCase().includes(query) || (p.short_code || '').toLowerCase().includes(query)) {
+        results.push({ type: 'project', id: p.id, name: p.name, detail: p.short_code || '' });
+      }
+    }
+    return results.slice(0, 8);
+  }, []);
+
+  const updateMention = useCallback(async (text, cursorPos) => {
     const before = text.slice(0, cursorPos);
     const atIndex = before.lastIndexOf('@');
 
@@ -45,42 +62,29 @@ export function useMentions() {
       return;
     }
 
-    // Refresh people/projects when @ is first typed
+    // Refresh lists when @ is first typed
     if (!lastMentionState.current) {
-      refreshLists();
+      await refreshLists();
       lastMentionState.current = true;
     }
 
     mentionStartPos.current = atIndex;
     setMentionQuery(query);
     setSelectedIndex(0);
-
-    // Filter matches
-    const results = [];
-    for (const p of people) {
-      if (p.display_name.toLowerCase().includes(query) || p.name.toLowerCase().includes(query)) {
-        results.push({ type: 'person', id: p.id, name: p.display_name, fullName: p.name, detail: p.role || '' });
-      }
-    }
-    for (const p of projects) {
-      if (p.name.toLowerCase().includes(query) || (p.short_code || '').toLowerCase().includes(query)) {
-        results.push({ type: 'project', id: p.id, name: p.name, detail: p.short_code || '' });
-      }
-    }
-    setMentionResults(results.slice(0, 8));
-  }, [people, projects]);
+    setMentionResults(buildResults(query));
+  }, [refreshLists, buildResults]);
 
   const selectMention = useCallback((text, item) => {
     const atIndex = mentionStartPos.current;
     if (atIndex === null) return text;
     const before = text.slice(0, atIndex);
-    // Find end of current mention query
     const afterAt = text.slice(atIndex + 1);
     const spaceIdx = afterAt.indexOf(' ');
     const after = spaceIdx >= 0 ? afterAt.slice(spaceIdx) : '';
     const newText = `${before}@${item.name.replace(/\s+/g, '')}${after ? after : ' '}`;
     setMentionQuery(null);
     setMentionResults([]);
+    lastMentionState.current = false;
     return newText;
   }, []);
 
@@ -109,6 +113,7 @@ export function useMentions() {
     if (e.key === 'Escape') {
       setMentionQuery(null);
       setMentionResults([]);
+      lastMentionState.current = false;
       return true;
     }
     return false;
