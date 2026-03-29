@@ -7,7 +7,8 @@ import { AlertTriangle, CalendarDays, Users, HelpCircle, Clock } from 'lucide-re
 export default function DailyDigest() {
   const [digest, setDigest] = useState(null);
 
-  useEffect(() => { api.getDigest().then(setDigest).catch(console.error); }, []);
+  const loadDigest = () => api.getDigest().then(setDigest).catch(console.error);
+  useEffect(() => { loadDigest(); }, []);
 
   if (!digest) return <div className="p-8 text-zinc-600">Loading digest...</div>;
 
@@ -23,7 +24,7 @@ export default function DailyDigest() {
             <AlertTriangle size={14} /> Overdue ({digest.overdue_items.length})
           </h3>
           <div className="flex flex-col gap-2">
-            {digest.overdue_items.map(i => <ItemCard key={i.id} item={i} compact />)}
+            {digest.overdue_items.map(i => <ItemCard key={i.id} item={i} onUpdate={loadDigest} compact />)}
           </div>
         </section>
       )}
@@ -32,7 +33,7 @@ export default function DailyDigest() {
         <section className="mb-6">
           <h3 className="text-sm font-medium text-sky-400 mb-2">Today ({digest.today_items.length})</h3>
           <div className="flex flex-col gap-2">
-            {digest.today_items.map(i => <ItemCard key={i.id} item={i} compact />)}
+            {digest.today_items.map(i => <ItemCard key={i.id} item={i} onUpdate={loadDigest} compact />)}
           </div>
         </section>
       )}
@@ -43,7 +44,7 @@ export default function DailyDigest() {
             <Clock size={14} /> Upcoming — Next 7 Days ({digest.upcoming_items.length})
           </h3>
           <div className="flex flex-col gap-2">
-            {digest.upcoming_items.map(i => <ItemCard key={i.id} item={i} compact />)}
+            {digest.upcoming_items.map(i => <ItemCard key={i.id} item={i} onUpdate={loadDigest} compact />)}
           </div>
         </section>
       )}
@@ -52,7 +53,7 @@ export default function DailyDigest() {
         <section className="mb-6">
           <h3 className="text-sm font-medium text-zinc-400 mb-2">This Week — No Date ({digest.this_week_count})</h3>
           <div className="flex flex-col gap-2">
-            {digest.this_week_items.map(i => <ItemCard key={i.id} item={i} compact />)}
+            {digest.this_week_items.map(i => <ItemCard key={i.id} item={i} onUpdate={loadDigest} compact />)}
           </div>
         </section>
       )}
@@ -76,7 +77,7 @@ export default function DailyDigest() {
             <HelpCircle size={14} /> Unlinked Items
           </h3>
           <div className="flex flex-col gap-2">
-            {digest.orphaned_items.map(i => <ItemCard key={i.id} item={i} compact />)}
+            {digest.orphaned_items.map(i => <ItemCard key={i.id} item={i} onUpdate={loadDigest} compact />)}
           </div>
         </section>
       )}
