@@ -164,8 +164,6 @@ export default function ItemCard({ item, onUpdate, compact = false, readonly = f
                 <option value="">No repeat</option>
                 {RECURRENCE_OPTIONS.filter(Boolean).map(r => <option key={r} value={r}>{r}</option>)}
               </select>
-              <button onClick={saveEdit} className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300"><Save size={12} /> Save</button>
-              <button onClick={() => { setEditing(false); setShowPredPicker(false); }} className="text-xs text-zinc-600 hover:text-zinc-400">Cancel</button>
             </div>
             {/* Predecessors in edit mode */}
             <div className="mt-2">
@@ -195,7 +193,7 @@ export default function ItemCard({ item, onUpdate, compact = false, readonly = f
                       .map(i => (
                         <button key={i.id}
                           onClick={async () => { await api.addPredecessor(item.id, i.id); setShowPredPicker(false); setPredSearch(''); onUpdate?.(); }}
-                          className="w-full text-left px-2 py-1.5 rounded text-xs text-zinc-400 hover:bg-white/[0.04] truncate transition-colors flex-shrink-0">
+                          className="w-full text-left px-2 py-1 rounded text-xs text-zinc-400 hover:bg-white/[0.04] truncate transition-colors flex-shrink-0">
                           {i.raw_text.slice(0, 80)}
                         </button>
                       ))
@@ -259,6 +257,12 @@ export default function ItemCard({ item, onUpdate, compact = false, readonly = f
         </div>
 
         {/* Action buttons */}
+        {!readonly && editing && (
+          <div className="flex items-center gap-1">
+            <button onClick={saveEdit} className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 px-2 py-1 rounded glass"><Save size={12} /> Save</button>
+            <button onClick={() => { setEditing(false); setShowPredPicker(false); }} className="text-xs text-zinc-600 hover:text-zinc-400 px-2 py-1">Cancel</button>
+          </div>
+        )}
         {!readonly && !editing && (
           <div className="flex items-center gap-0.5 md:opacity-0 md:group-hover:opacity-100 transition-all">
             <button onClick={togglePin} className={`mt-0.5 p-1 transition-all ${item.is_pinned ? 'text-blue-400' : 'text-zinc-700 hover:text-zinc-400'}`} title={item.is_pinned ? 'Unpin' : 'Pin'}>
