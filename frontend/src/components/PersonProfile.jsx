@@ -39,6 +39,7 @@ export default function PersonProfile({ refreshKey, onRefresh }) {
   const [profileForm, setProfileForm] = useState({ ...DEFAULT_PROFILE });
   const [allPeople, setAllPeople] = useState([]);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [quickNote, setQuickNote] = useState('');
 
   useEffect(() => {
     api.getPerson(id).then(p => {
@@ -274,6 +275,27 @@ export default function PersonProfile({ refreshKey, onRefresh }) {
                 </div>
               </>
             )}
+          </div>
+        )}
+
+        {/* Quick add to general notes */}
+        {!editingProfile && (
+          <div className="flex gap-2 mt-3 pt-2 border-t border-white/[0.04]">
+            <input placeholder="Add to general notes..." value={quickNote}
+              onChange={e => setQuickNote(e.target.value)}
+              onKeyDown={async e => {
+                if (e.key === 'Enter' && quickNote.trim()) {
+                  const p = { ...DEFAULT_PROFILE, ...profile };
+                  const existing = p.general || '';
+                  p.general = (existing ? existing + '\n' : '') + quickNote.trim();
+                  await api.updatePerson(id, { profile: p });
+                  setQuickNote('');
+                  const updated = await api.getPerson(id);
+                  setPerson(updated);
+                  setProfileForm({ ...DEFAULT_PROFILE, ...(updated.profile || {}) });
+                }
+              }}
+              className="flex-1 glass-input rounded px-2 py-1 text-xs text-zinc-300 outline-none" />
           </div>
         )}
       </div>

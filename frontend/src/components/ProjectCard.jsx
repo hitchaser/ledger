@@ -44,8 +44,7 @@ export default function ProjectCard({ refreshKey, onRefresh }) {
 
   const addContextNote = async () => {
     if (!addNote.trim()) return;
-    const date = new Date().toISOString().split('T')[0];
-    const updated = (notes ? notes + '\n' : '') + `[${date}] ${addNote.trim()}`;
+    const updated = (notes ? notes + '\n' : '') + addNote.trim();
     await api.updateProject(id, { context_notes: updated });
     setNotes(updated);
     setAddNote('');
