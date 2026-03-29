@@ -188,11 +188,10 @@ export default function ItemCard({ item, onUpdate, compact = false, readonly = f
                 <div className="mt-1">
                   <input value={predSearch} onChange={e => setPredSearch(e.target.value)} placeholder="Search items..."
                     className="w-full glass-input rounded px-2 py-1 text-xs text-zinc-300 outline-none mb-1" />
-                  <div className="max-h-48 overflow-y-auto flex flex-col gap-0.5">
+                  <div className="max-h-60 overflow-y-auto flex flex-col gap-0.5">
                     {openItems
                       .filter(i => !item.predecessors?.some(p => p.id === i.id))
                       .filter(i => !predSearch || i.raw_text.toLowerCase().includes(predSearch.toLowerCase()))
-                      .slice(0, 8)
                       .map(i => (
                         <button key={i.id}
                           onClick={async () => { await api.addPredecessor(item.id, i.id); setShowPredPicker(false); setPredSearch(''); onUpdate?.(); }}
