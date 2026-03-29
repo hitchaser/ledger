@@ -195,7 +195,7 @@ export default function ItemCard({ item, onUpdate, compact = false, readonly = f
                       .map(i => (
                         <button key={i.id}
                           onClick={async () => { await api.addPredecessor(item.id, i.id); setShowPredPicker(false); setPredSearch(''); onUpdate?.(); }}
-                          className="w-full text-left px-2 py-2 rounded text-xs text-zinc-400 hover:bg-white/[0.04] truncate transition-colors flex-shrink-0">
+                          className="w-full text-left px-2 py-1.5 rounded text-xs text-zinc-400 hover:bg-white/[0.04] truncate transition-colors flex-shrink-0">
                           {i.raw_text.slice(0, 80)}
                         </button>
                       ))
