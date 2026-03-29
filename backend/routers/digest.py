@@ -16,21 +16,19 @@ def get_digest(db: Session = Depends(get_db)):
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     today_end = today_start + timedelta(days=1)
 
-    # Overdue: due_date in the past OR (urgency=today, created before today)
+    # Overdue: items with due_date in the past (only date-based, not urgency-based)
     overdue = db.query(CaptureItem).filter(
         CaptureItem.status == ItemStatus.open,
-        or_(
-            and_(CaptureItem.due_date != None, CaptureItem.due_date < today_start),
-            and_(CaptureItem.due_date == None, CaptureItem.urgency == Urgency.today, CaptureItem.created_at < today_start),
-        ),
-    ).order_by(CaptureItem.due_date.asc().nullslast(), CaptureItem.created_at).all()
+        CaptureItem.due_date != None,
+        CaptureItem.due_date < today_start,
+    ).order_by(CaptureItem.due_date.asc()).all()
 
-    # Today: due_date is today OR (urgency=today, created today, no due_date)
+    # Today: due_date is today OR urgency=today (regardless of creation date)
     today_items = db.query(CaptureItem).filter(
         CaptureItem.status == ItemStatus.open,
         or_(
             and_(CaptureItem.due_date != None, CaptureItem.due_date >= today_start, CaptureItem.due_date < today_end),
-            and_(CaptureItem.due_date == None, CaptureItem.urgency == Urgency.today, CaptureItem.created_at >= today_start),
+            and_(CaptureItem.due_date == None, CaptureItem.urgency == Urgency.today),
         ),
     ).order_by(CaptureItem.due_date.asc().nullslast(), CaptureItem.created_at).all()
 
@@ -50,6 +48,12 @@ def get_digest(db: Session = Depends(get_db)):
         CaptureItem.due_date == None,
     ).order_by(CaptureItem.created_at).all()
 
+    # Collect all IDs already shown in above sections
+    shown_ids = set()
+    for items in [overdue, today_items, upcoming, this_week]:
+        for i in items:
+            shown_ids.add(i.id)
+
     # Stale people: no linked items in 14+ days
     fourteen_days_ago = now - timedelta(days=14)
     all_people = db.query(Person).filter(Person.is_archived == False).all()
@@ -61,12 +65,13 @@ def get_digest(db: Session = Depends(get_db)):
         if latest is None or latest < fourteen_days_ago:
             stale_people.append({"id": p.id, "display_name": p.display_name})
 
-    # Orphaned items: open, no linked person or project
+    # Orphaned items: open, no linked person or project, NOT already in another section
     orphaned = db.query(CaptureItem).filter(
         CaptureItem.status == ItemStatus.open,
         ~CaptureItem.id.in_(db.query(CaptureItemPerson.capture_item_id)),
         ~CaptureItem.id.in_(db.query(CaptureItemProject.capture_item_id)),
         CaptureItem.item_type != ItemType.profile_update,
+        ~CaptureItem.id.in_(shown_ids) if shown_ids else True,
     ).order_by(CaptureItem.created_at.desc()).limit(20).all()
 
     return {
