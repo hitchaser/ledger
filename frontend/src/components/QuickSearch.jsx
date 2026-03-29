@@ -52,8 +52,7 @@ export default function QuickSearch({ onClose }) {
             className="flex-1 bg-transparent px-3 py-3.5 text-sm text-zinc-200 outline-none placeholder-zinc-600" />
           <div className="flex items-center gap-2">
             {loading && <div className="w-3 h-3 border-2 border-blue-400/30 border-t-blue-400 rounded-full animate-spin" />}
-            <kbd className="hidden md:inline text-xs text-zinc-700 border border-white/[0.06] rounded px-1.5 py-0.5">ESC</kbd>
-            <button onClick={onClose} className="text-zinc-600 hover:text-zinc-300 transition-colors md:hidden"><X size={16} /></button>
+            <button onClick={onClose} className="text-zinc-600 hover:text-zinc-300 transition-colors"><X size={16} /></button>
           </div>
         </div>
         <div className="max-h-[60vh] overflow-y-auto p-2">
@@ -104,37 +103,43 @@ export default function QuickSearch({ onClose }) {
                 <Circle size={12} className="text-blue-400" />
                 <span className="text-xs text-zinc-500 font-medium uppercase tracking-wide">Items</span>
               </div>
-              {results.items.map(i => (
-                <div key={i.id} className="px-3 py-2 rounded hover:bg-white/[0.05] transition-colors">
-                  <div className="flex items-start gap-2">
-                    {i.status === 'done'
-                      ? <CheckCircle size={14} className="text-blue-400/50 mt-0.5 flex-shrink-0" />
-                      : <Circle size={14} className="text-zinc-600 mt-0.5 flex-shrink-0" />
-                    }
-                    <div className="flex-1 min-w-0">
-                      <p className={`text-sm ${i.status === 'done' ? 'text-zinc-500 line-through' : 'text-zinc-300'}`}>
-                        {i.raw_text}
-                      </p>
-                      {i.matching_note && (
-                        <div className="flex items-center gap-1 mt-0.5">
-                          <MessageSquare size={10} className="text-zinc-600" />
-                          <span className="text-xs text-zinc-500 italic">Note: {i.matching_note}</span>
+              {results.items.map(i => {
+                const dest = i.linked_people?.[0] ? `/people/${i.linked_people[0].id}`
+                  : i.linked_projects?.[0] ? `/projects/${i.linked_projects[0].id}`
+                  : '/';
+                return (
+                  <button key={i.id} onClick={() => go(dest)}
+                    className="w-full text-left px-3 py-2 rounded hover:bg-white/[0.05] transition-colors">
+                    <div className="flex items-start gap-2">
+                      {i.status === 'done'
+                        ? <CheckCircle size={14} className="text-blue-400/50 mt-0.5 flex-shrink-0" />
+                        : <Circle size={14} className="text-zinc-600 mt-0.5 flex-shrink-0" />
+                      }
+                      <div className="flex-1 min-w-0">
+                        <p className={`text-sm ${i.status === 'done' ? 'text-zinc-500 line-through' : 'text-zinc-300'}`}>
+                          {i.raw_text}
+                        </p>
+                        {i.matching_note && (
+                          <div className="flex items-center gap-1 mt-0.5">
+                            <MessageSquare size={10} className="text-zinc-600" />
+                            <span className="text-xs text-zinc-500 italic">Note: {i.matching_note}</span>
+                          </div>
+                        )}
+                        <div className="flex flex-wrap items-center gap-1 mt-1">
+                          {i.effective_type && <span className={`text-xs ${TYPE_COLORS[i.effective_type] || 'text-zinc-500'}`}>{i.effective_type}</span>}
+                          {i.linked_people?.map(p => (
+                            <span key={p.id} className="text-xs text-indigo-400/60">{p.display_name}</span>
+                          ))}
+                          {i.linked_projects?.map(p => (
+                            <span key={p.id} className="text-xs text-cyan-400/60">{p.short_code || p.name}</span>
+                          ))}
+                          <span className="text-xs text-zinc-700 ml-auto">{i.status === 'done' ? 'completed' : 'open'}</span>
                         </div>
-                      )}
-                      <div className="flex flex-wrap items-center gap-1 mt-1">
-                        {i.effective_type && <span className={`text-xs ${TYPE_COLORS[i.effective_type] || 'text-zinc-500'}`}>{i.effective_type}</span>}
-                        {i.linked_people?.map(p => (
-                          <span key={p.id} className="text-xs text-indigo-400/60">{p.display_name}</span>
-                        ))}
-                        {i.linked_projects?.map(p => (
-                          <span key={p.id} className="text-xs text-cyan-400/60">{p.short_code || p.name}</span>
-                        ))}
-                        <span className="text-xs text-zinc-700 ml-auto">{i.status === 'done' ? 'completed' : 'open'}</span>
                       </div>
                     </div>
-                  </div>
-                </div>
-              ))}
+                  </button>
+                );
+              })}
             </div>
           )}
 
