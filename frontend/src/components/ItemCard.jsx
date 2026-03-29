@@ -81,7 +81,7 @@ export default function ItemCard({ item, onUpdate, compact = false, readonly = f
       <div className="flex items-start gap-3">
         {!readonly && !isDone && (
           <button onClick={markDone} className="mt-0.5 flex-shrink-0 w-5 h-5 rounded border border-white/10 hover:border-blue-400/50 hover:bg-blue-500/10 flex items-center justify-center transition-all">
-            <Check size={12} className="opacity-0 group-hover:opacity-100 text-blue-400 transition-opacity" />
+            <Check size={12} className="md:opacity-0 md:group-hover:opacity-100 text-blue-400 transition-opacity" />
           </button>
         )}
         {isDone && (
@@ -143,7 +143,7 @@ export default function ItemCard({ item, onUpdate, compact = false, readonly = f
           )}
         </div>
         {!readonly && !editing && (
-          <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-all">
+          <div className="flex items-center gap-0.5 md:opacity-0 md:group-hover:opacity-100 transition-all">
             <button onClick={startEdit} className="mt-0.5 p-1 text-zinc-700 hover:text-zinc-400" title="Edit">
               <Pencil size={13} />
             </button>
