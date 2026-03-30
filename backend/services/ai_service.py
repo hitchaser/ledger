@@ -80,6 +80,7 @@ def _call_ai(messages: list, model_key: str = "classification_model",
             body = {
                 "model": model,
                 "messages": messages,
+                "user": "ledger",
             }
             if format_json:
                 body["response_format"] = {"type": "json_object"}
