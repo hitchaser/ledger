@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import Avatar from './Avatar';
@@ -7,6 +7,32 @@ import { GitBranch, ChevronDown, ChevronUp } from 'lucide-react';
 function OrgNode({ node, navigate, depth = 0 }) {
   const [expanded, setExpanded] = useState(depth < 3);
   const hasChildren = node.children && node.children.length > 0;
+  const childrenRef = useRef(null);
+  const [hLineStyle, setHLineStyle] = useState(null);
+
+  useEffect(() => {
+    if (!expanded || !hasChildren || node.children.length < 2) {
+      setHLineStyle(null);
+      return;
+    }
+    // Measure after render
+    const timer = setTimeout(() => {
+      const container = childrenRef.current;
+      if (!container) return;
+      const vLines = container.querySelectorAll(':scope > div > .org-vline');
+      if (vLines.length < 2) return;
+      const first = vLines[0];
+      const last = vLines[vLines.length - 1];
+      const containerRect = container.getBoundingClientRect();
+      const firstRect = first.getBoundingClientRect();
+      const lastRect = last.getBoundingClientRect();
+      setHLineStyle({
+        left: firstRect.left - containerRect.left + firstRect.width / 2,
+        width: (lastRect.left + lastRect.width / 2) - (firstRect.left + firstRect.width / 2),
+      });
+    }, 50);
+    return () => clearTimeout(timer);
+  }, [expanded, hasChildren, node.children?.length]);
 
   return (
     <div className="flex flex-col items-center">
@@ -30,21 +56,20 @@ function OrgNode({ node, navigate, depth = 0 }) {
         )}
       </div>
 
-      {/* Connector line down */}
+      {/* Children */}
       {hasChildren && expanded && (
         <>
           <div className="w-px h-5 bg-white/[0.1]" />
 
-          {/* Children with horizontal connector */}
-          <div className="relative flex gap-2 items-start">
-            {/* Horizontal line spanning from first child center to last child center */}
-            {node.children.length > 1 && (
+          <div ref={childrenRef} className="relative flex gap-3 items-start">
+            {/* Horizontal connector */}
+            {hLineStyle && (
               <div className="absolute top-0 h-px bg-white/[0.1]"
-                style={{ left: `calc(50% / ${node.children.length})`, right: `calc(50% / ${node.children.length})` }} />
+                style={{ left: hLineStyle.left, width: hLineStyle.width }} />
             )}
             {node.children.map(child => (
               <div key={child.id} className="flex flex-col items-center">
-                <div className="w-px h-4 bg-white/[0.1]" />
+                <div className="org-vline w-px h-4 bg-white/[0.1]" />
                 <OrgNode node={child} navigate={navigate} depth={depth + 1} />
               </div>
             ))}
