@@ -35,20 +35,13 @@ function OrgNode({ node, navigate, depth = 0 }) {
         <>
           <div className="w-px h-5 bg-white/[0.1]" />
 
-          {/* Horizontal connector bar */}
-          {node.children.length > 1 && (
-            <div className="relative flex items-start">
-              <div className="absolute top-0 bg-white/[0.1]" style={{
-                left: '50%',
-                width: `calc(100% - ${100 / node.children.length}%)`,
-                transform: 'translateX(-50%)',
-                height: '1px',
-              }} />
-            </div>
-          )}
-
-          {/* Children */}
-          <div className="flex gap-2 items-start">
+          {/* Children with horizontal connector */}
+          <div className="relative flex gap-2 items-start">
+            {/* Horizontal line spanning from first child center to last child center */}
+            {node.children.length > 1 && (
+              <div className="absolute top-0 h-px bg-white/[0.1]"
+                style={{ left: `calc(50% / ${node.children.length})`, right: `calc(50% / ${node.children.length})` }} />
+            )}
             {node.children.map(child => (
               <div key={child.id} className="flex flex-col items-center">
                 <div className="w-px h-4 bg-white/[0.1]" />
