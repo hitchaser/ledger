@@ -402,6 +402,7 @@ from routers.settings import router as settings_router
 from routers.timeline import router as timeline_router
 from routers.search import router as search_router
 from routers.importexport import router as importexport_router
+from routers.orgchart import router as orgchart_router
 
 app.include_router(auth_router)
 app.include_router(captures_router)
@@ -413,6 +414,7 @@ app.include_router(settings_router)
 app.include_router(timeline_router)
 app.include_router(search_router)
 app.include_router(importexport_router)
+app.include_router(orgchart_router)
 
 
 # ── WebSocket (auth-protected) ──

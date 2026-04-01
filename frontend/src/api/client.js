@@ -106,6 +106,10 @@ export const api = {
   exportTeam: (columns, format = 'csv') => `/api/import-export/export/team?columns=${columns}&format=${format}`,
   exportBackup: () => '/api/import-export/export/backup',
 
+  // Org Chart
+  getOrgTree: () => request('/org/tree'),
+  getOrgChain: (personId) => request(`/org/chain/${personId}`),
+
   // Settings
   getSettings: () => request('/settings'),
   updateSettings: (data) => request('/settings', { method: 'PUT', body: JSON.stringify(data) }),

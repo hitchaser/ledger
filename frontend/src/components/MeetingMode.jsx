@@ -22,6 +22,7 @@ export default function MeetingMode({ refreshKey, onRefresh }) {
   const captureInputRef = useRef(null);
   const mentions = useMentions();
   const [prep, setPrep] = useState(null);
+  const [orgChain, setOrgChain] = useState([]);
 
   const isPerson = type === 'person';
 
@@ -39,6 +40,9 @@ export default function MeetingMode({ refreshKey, onRefresh }) {
     loadData();
     api.getActiveMeeting().then(s => { if (s) setSession(s); });
     api.getMeetingPrep(type, id).then(setPrep).catch(() => {});
+    if (type === 'person') {
+      api.getOrgChain(id).then(d => setOrgChain(d.chain || [])).catch(() => {});
+    }
 
     // Auto-end session if user navigates away without clicking End Meeting
     return () => {
@@ -155,6 +159,24 @@ export default function MeetingMode({ refreshKey, onRefresh }) {
             ) : (
               <>First meeting &middot; {prep.open_items} open items</>
             )}
+          </div>
+        )}
+
+        {/* Org Chain */}
+        {isPerson && orgChain.length > 1 && (
+          <div className="mb-3 p-2 glass rounded-lg">
+            <span className="text-xs text-zinc-600 font-medium">Reporting Chain: </span>
+            <div className="flex flex-wrap items-center gap-1 mt-1">
+              {[...orgChain].reverse().map((p, i) => (
+                <span key={p.id} className="flex items-center gap-1">
+                  {i > 0 && <span className="text-zinc-700 text-xs">&rarr;</span>}
+                  <span className={`text-xs ${p.id === id ? 'text-blue-400 font-medium' : 'text-zinc-400'}`}>
+                    {p.display_name}
+                    {p.role && <span className="text-zinc-600 ml-0.5">({p.reporting_level})</span>}
+                  </span>
+                </span>
+              ))}
+            </div>
           </div>
         )}
 
