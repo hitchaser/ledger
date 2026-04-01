@@ -19,6 +19,7 @@ const PROFILE_FIELDS = [
   { key: 'pets', label: 'Pets', isList: true },
   { key: 'hobbies', label: 'Hobbies' },
   { key: 'location', label: 'Location' },
+  { key: 'address', label: 'Address' },
 ];
 
 function displayValue(val, isList) {
@@ -35,7 +36,7 @@ export default function PersonProfile({ refreshKey, onRefresh }) {
   const [logs, setLogs] = useState([]);
   const [tab, setTab] = useState('items');
   const [editingDetails, setEditingDetails] = useState(false);
-  const [detailsForm, setDetailsForm] = useState({ name: '', display_name: '', role: '', reporting_level: '', email: '' });
+  const [detailsForm, setDetailsForm] = useState({ name: '', display_name: '', role: '', reporting_level: '', email: '', manager_id: '' });
   const [editingProfile, setEditingProfile] = useState(false);
   const [profileForm, setProfileForm] = useState({ ...DEFAULT_PROFILE });
   const [allPeople, setAllPeople] = useState([]);
@@ -47,7 +48,7 @@ export default function PersonProfile({ refreshKey, onRefresh }) {
   useEffect(() => {
     api.getPerson(id).then(p => {
       setPerson(p);
-      setDetailsForm({ name: p.name, display_name: p.display_name, role: p.role || '', reporting_level: p.reporting_level, email: p.email || '' });
+      setDetailsForm({ name: p.name, display_name: p.display_name, role: p.role || '', reporting_level: p.reporting_level, email: p.email || '', manager_id: p.manager_id || '' });
       setProfileForm({ ...DEFAULT_PROFILE, ...(p.profile || {}) });
     });
     api.getPersonItems(id, 'open').then(setItems);
@@ -139,7 +140,11 @@ export default function PersonProfile({ refreshKey, onRefresh }) {
                 <Settings size={16} />
               </button>
             </div>
-            <p className="text-sm text-zinc-600">{person.role || 'No role set'} &middot; {person.reporting_level}{person.email ? ` · ${person.email}` : ''}</p>
+            <p className="text-sm text-zinc-600">
+              {person.role || 'No role set'} &middot; {person.reporting_level}
+              {person.email ? ` · ${person.email}` : ''}
+              {person.manager && <> &middot; Reports to <Link to={`/people/${person.manager.id}`} className="text-blue-400 hover:text-blue-300">{person.manager.display_name}</Link></>}
+            </p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -193,10 +198,20 @@ export default function PersonProfile({ refreshKey, onRefresh }) {
                 <option value="other">Other</option>
               </select>
             </div>
-            <div className="col-span-2">
+            <div>
               <label className="text-xs text-zinc-600 mb-0.5 block">Email</label>
               <input value={detailsForm.email} onChange={e => setDetailsForm({...detailsForm, email: e.target.value})}
                 className="w-full glass-input rounded px-3 py-1.5 text-sm text-zinc-200 outline-none" />
+            </div>
+            <div>
+              <label className="text-xs text-zinc-600 mb-0.5 block">Reports To</label>
+              <select value={detailsForm.manager_id || ''} onChange={e => setDetailsForm({...detailsForm, manager_id: e.target.value})}
+                className="w-full glass-input rounded px-3 py-1.5 text-sm text-zinc-300 outline-none">
+                <option value="">None</option>
+                {allPeople.filter(p => p.id !== id).map(p => (
+                  <option key={p.id} value={p.id}>{p.display_name}</option>
+                ))}
+              </select>
             </div>
             {detailsDisplayNameDupe && (
               <div className="col-span-2 p-2 rounded bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs">

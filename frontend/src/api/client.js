@@ -86,6 +86,26 @@ export const api = {
   // Meeting Prep
   getMeetingPrep: (type, id) => request(`/meetings/prep/${type}/${id}`),
 
+  // Import/Export
+  previewImport: async (file) => {
+    const form = new FormData();
+    form.append('file', file);
+    const res = await fetch('/api/import-export/preview', { method: 'POST', body: form });
+    if (res.status === 401) { window.location.reload(); throw new Error('Session expired'); }
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  },
+  commitImport: async (file) => {
+    const form = new FormData();
+    form.append('file', file);
+    const res = await fetch('/api/import-export/commit', { method: 'POST', body: form });
+    if (res.status === 401) { window.location.reload(); throw new Error('Session expired'); }
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  },
+  exportTeam: (columns, format = 'csv') => `/api/import-export/export/team?columns=${columns}&format=${format}`,
+  exportBackup: () => '/api/import-export/export/backup',
+
   // Settings
   getSettings: () => request('/settings'),
   updateSettings: (data) => request('/settings', { method: 'PUT', body: JSON.stringify(data) }),

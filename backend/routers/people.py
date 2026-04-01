@@ -11,7 +11,8 @@ router = APIRouter(prefix="/api/people", tags=["people"])
 
 DEFAULT_PROFILE = {
     "spouse": "", "anniversary": "", "children": [],
-    "pets": [], "birthday": "", "hobbies": "", "location": "", "general": ""
+    "pets": [], "birthday": "", "hobbies": "", "location": "",
+    "address": "", "general": ""
 }
 
 def person_response(p: Person, db: Session) -> dict:
@@ -20,12 +21,16 @@ def person_response(p: Person, db: Session) -> dict:
         CaptureItem.status == ItemStatus.open
     ).count()
     profile = {**DEFAULT_PROFILE, **(p.profile or {})}
+    manager_info = None
+    if p.manager_id and p.manager:
+        manager_info = {"id": p.manager.id, "display_name": p.manager.display_name}
     return {
         "id": p.id, "name": p.name, "display_name": p.display_name,
         "role": p.role, "reporting_level": p.reporting_level.value if p.reporting_level else "other",
         "email": p.email, "created_at": p.created_at, "updated_at": p.updated_at,
         "is_archived": p.is_archived, "context_notes": p.context_notes or "",
         "profile": profile, "avatar": p.avatar,
+        "manager_id": p.manager_id, "manager": manager_info,
         "open_item_count": count,
         "projects": [{"id": pr.id, "name": pr.name, "short_code": pr.short_code} for pr in (p.projects or []) if not pr.is_archived],
     }
@@ -73,6 +78,9 @@ def update_person(person_id: UUID, body: PersonUpdate, db: Session = Depends(get
         p.profile = data.pop("profile")
         from sqlalchemy.orm.attributes import flag_modified
         flag_modified(p, "profile")
+    if "manager_id" in data:
+        mid = data.pop("manager_id")
+        p.manager_id = mid if mid else None
     for field, val in data.items():
         setattr(p, field, val)
     db.commit()

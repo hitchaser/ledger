@@ -36,6 +36,11 @@ if "avatar" not in _people_cols:
         conn.execute(sa_text("ALTER TABLE people ADD COLUMN avatar TEXT"))
     logger.info("Migrated people table: added avatar column")
 
+if "manager_id" not in _people_cols:
+    with engine.begin() as conn:
+        conn.execute(sa_text("ALTER TABLE people ADD COLUMN manager_id UUID REFERENCES people(id)"))
+    logger.info("Migrated people table: added manager_id column")
+
 if "profile" not in _people_cols:
     with engine.begin() as conn:
         conn.execute(sa_text("ALTER TABLE people ADD COLUMN profile JSON"))
@@ -396,6 +401,7 @@ from routers.digest import router as digest_router
 from routers.settings import router as settings_router
 from routers.timeline import router as timeline_router
 from routers.search import router as search_router
+from routers.importexport import router as importexport_router
 
 app.include_router(auth_router)
 app.include_router(captures_router)
@@ -406,6 +412,7 @@ app.include_router(digest_router)
 app.include_router(settings_router)
 app.include_router(timeline_router)
 app.include_router(search_router)
+app.include_router(importexport_router)
 
 
 # ── WebSocket (auth-protected) ──

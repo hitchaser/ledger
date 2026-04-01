@@ -66,6 +66,7 @@ class ProfileData(BaseModel):
     birthday: str = ""
     hobbies: str = ""
     location: str = ""
+    address: str = ""
     general: str = ""
 
 class PersonCreate(BaseModel):
@@ -87,6 +88,7 @@ class PersonUpdate(BaseModel):
     is_archived: Optional[bool] = None
     profile: Optional[ProfileData] = None
     avatar: Optional[str] = None
+    manager_id: Optional[str] = None
 
 class PersonResponse(BaseModel):
     id: UUID

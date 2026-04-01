@@ -7,3 +7,4 @@ websockets==14.1
 python-multipart==0.0.18
 PyJWT==2.10.1
 python-dateutil==2.9.0
+openpyxl==3.1.5

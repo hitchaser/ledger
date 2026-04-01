@@ -13,6 +13,7 @@ import ProjectCard from './components/ProjectCard';
 import MeetingMode from './components/MeetingMode';
 import DailyDigest from './components/DailyDigest';
 import SettingsPage from './components/SettingsPage';
+import ImportExport from './components/ImportExport';
 import Timeline from './components/Timeline';
 import QuickSearch from './components/QuickSearch';
 import Toast from './components/Toast';
@@ -115,6 +116,7 @@ export default function App() {
             <Route path="/meeting/:type/:id" element={<MeetingMode refreshKey={refreshKey} onRefresh={refresh} />} />
             <Route path="/digest" element={<DailyDigest />} />
             <Route path="/timeline" element={<Timeline />} />
+            <Route path="/import-export" element={<ImportExport />} />
             <Route path="/settings" element={<SettingsPage theme={theme} onToggleTheme={toggleTheme} />} />
           </Routes>
         </main>

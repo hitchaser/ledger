@@ -151,11 +151,14 @@ class Person(Base):
     is_archived = Column(Boolean, default=False)
     context_notes = Column(Text, default="")
     avatar = Column(Text, nullable=True)  # base64 data URL
+    manager_id = Column(UUID(as_uuid=True), ForeignKey("people.id"), nullable=True)
     profile = Column(JSON, default=lambda: {
         "spouse": "", "anniversary": "", "children": [],
-        "pets": [], "birthday": "", "hobbies": "", "location": "", "general": ""
+        "pets": [], "birthday": "", "hobbies": "", "location": "",
+        "address": "", "general": ""
     })
 
+    manager = relationship("Person", remote_side="Person.id", foreign_keys=[manager_id], backref="direct_reports")
     capture_items = relationship("CaptureItem", secondary="capture_item_people", back_populates="linked_people")
     profile_logs = relationship("ProfileLog", back_populates="person", foreign_keys="ProfileLog.person_id")
     projects = relationship("Project", secondary="person_projects", back_populates="people")
