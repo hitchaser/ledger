@@ -2,52 +2,61 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import Avatar from './Avatar';
-import { GitBranch, ChevronDown, ChevronRight, Users } from 'lucide-react';
+import { GitBranch, ChevronDown, ChevronUp } from 'lucide-react';
 
-function OrgNode({ node, depth = 0, navigate }) {
-  const [expanded, setExpanded] = useState(depth < 2);
+function OrgNode({ node, navigate, depth = 0 }) {
+  const [expanded, setExpanded] = useState(depth < 3);
   const hasChildren = node.children && node.children.length > 0;
 
-  const LEVEL_COLORS = {
-    director: 'border-l-violet-500',
-    manager: 'border-l-blue-500',
-    employee: 'border-l-sky-500',
-    peer: 'border-l-slate-500',
-    other: 'border-l-zinc-600',
-  };
-
   return (
-    <div className={depth > 0 ? 'ml-6' : ''}>
-      <div className={`flex items-center gap-2 glass glass-hover rounded-lg px-3 py-2 mb-1 border-l-2 ${LEVEL_COLORS[node.reporting_level] || LEVEL_COLORS.other} cursor-pointer transition-all`}>
+    <div className="flex flex-col items-center">
+      {/* Person box */}
+      <div
+        onClick={() => navigate(`/people/${node.id}`)}
+        className="glass glass-hover rounded-lg px-3 py-2 cursor-pointer transition-all min-w-[120px] max-w-[160px] text-center relative"
+      >
+        <div className="flex flex-col items-center gap-1">
+          <Avatar src={node.avatar} name={node.display_name} size="sm" />
+          <div className="text-xs font-medium text-zinc-200 leading-tight">{node.display_name}</div>
+          {node.role && <div className="text-[10px] text-zinc-500 leading-tight truncate w-full">{node.role}</div>}
+        </div>
         {hasChildren && (
-          <button onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }} className="text-zinc-600 hover:text-zinc-300 flex-shrink-0">
-            {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+          <button
+            onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }}
+            className="absolute -bottom-2.5 left-1/2 -translate-x-1/2 w-5 h-5 rounded-full bg-zinc-800 border border-white/10 flex items-center justify-center text-zinc-500 hover:text-zinc-300 z-10 transition-colors"
+          >
+            {expanded ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
           </button>
         )}
-        {!hasChildren && <div className="w-[14px]" />}
-        <div className="flex items-center gap-2.5 flex-1 min-w-0" onClick={() => navigate(`/people/${node.id}`)}>
-          <Avatar src={node.avatar} name={node.display_name} size="sm" />
-          <div className="flex-1 min-w-0">
-            <span className="text-sm font-medium text-zinc-200">{node.display_name}</span>
-            {node.name !== node.display_name && <span className="text-xs text-zinc-600 ml-1.5">({node.name})</span>}
-          </div>
-          {node.role && <span className="text-xs text-zinc-500 flex-shrink-0">{node.role}</span>}
-          <span className={`badge text-xs ${
-            node.reporting_level === 'director' ? 'bg-violet-500/15 text-violet-400 border border-violet-500/20' :
-            node.reporting_level === 'manager' ? 'bg-blue-500/15 text-blue-400 border border-blue-500/20' :
-            node.reporting_level === 'employee' ? 'bg-sky-500/15 text-sky-400 border border-sky-500/20' :
-            'bg-zinc-500/10 text-zinc-500 border border-zinc-500/15'
-          }`}>{node.reporting_level}</span>
-          {hasChildren && <span className="text-xs text-zinc-700">{node.children.length}</span>}
-        </div>
       </div>
-      {expanded && hasChildren && (
-        <div className="relative">
-          <div className="absolute left-[19px] top-0 bottom-2 w-px bg-white/[0.06]" />
-          {node.children.map(child => (
-            <OrgNode key={child.id} node={child} depth={depth + 1} navigate={navigate} />
-          ))}
-        </div>
+
+      {/* Connector line down */}
+      {hasChildren && expanded && (
+        <>
+          <div className="w-px h-5 bg-white/[0.1]" />
+
+          {/* Horizontal connector bar */}
+          {node.children.length > 1 && (
+            <div className="relative flex items-start">
+              <div className="absolute top-0 bg-white/[0.1]" style={{
+                left: '50%',
+                width: `calc(100% - ${100 / node.children.length}%)`,
+                transform: 'translateX(-50%)',
+                height: '1px',
+              }} />
+            </div>
+          )}
+
+          {/* Children */}
+          <div className="flex gap-2 items-start">
+            {node.children.map(child => (
+              <div key={child.id} className="flex flex-col items-center">
+                <div className="w-px h-4 bg-white/[0.1]" />
+                <OrgNode node={child} navigate={navigate} depth={depth + 1} />
+              </div>
+            ))}
+          </div>
+        </>
       )}
     </div>
   );
@@ -62,8 +71,8 @@ export default function OrgChartPage() {
   if (!data) return <div className="p-8 text-zinc-600">Loading org chart...</div>;
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-4">
-      <div className="flex items-center justify-between mb-4">
+    <div className="px-4 py-4">
+      <div className="flex items-center justify-between mb-6">
         <h2 className="text-lg font-semibold text-zinc-200 flex items-center gap-2">
           <GitBranch size={20} className="text-blue-400" /> Org Chart
         </h2>
@@ -76,10 +85,12 @@ export default function OrgChartPage() {
         </div>
       )}
 
-      <div className="flex flex-col">
-        {data.roots.map(root => (
-          <OrgNode key={root.id} node={root} depth={0} navigate={navigate} />
-        ))}
+      <div className="overflow-x-auto pb-8">
+        <div className="flex gap-8 items-start justify-center min-w-min">
+          {data.roots.map(root => (
+            <OrgNode key={root.id} node={root} navigate={navigate} depth={0} />
+          ))}
+        </div>
       </div>
     </div>
   );
