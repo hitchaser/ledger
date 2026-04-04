@@ -226,6 +226,40 @@ def _get_subtree_ext_ids(db, root_ext_ids: set) -> set:
     return result_ext_ids
 
 
+def _generate_unique_display_name(full_name: str, taken_names: set) -> str:
+    """Generate a short unique display name from a full name.
+    Strategy: FirstName LastInitial → FirstName La → FirstName Las → ... → Full Name → Full Name 2"""
+    parts = full_name.strip().split()
+    if len(parts) < 2:
+        candidate = full_name.strip()
+        if candidate.lower() not in taken_names:
+            return candidate
+        for i in range(2, 100):
+            c = f"{candidate} {i}"
+            if c.lower() not in taken_names:
+                return c
+        return candidate
+
+    first = parts[0]
+    last = " ".join(parts[1:])
+
+    # Try "First L", "First La", "First Las", ... up to full last name
+    for length in range(1, len(last) + 1):
+        candidate = f"{first} {last[:length]}"
+        if candidate.lower() not in taken_names:
+            return candidate
+
+    # Full name is taken — append number
+    candidate = full_name.strip()
+    if candidate.lower() not in taken_names:
+        return candidate
+    for i in range(2, 100):
+        c = f"{candidate} {i}"
+        if c.lower() not in taken_names:
+            return c
+    return candidate
+
+
 def _parse_org_xlsx(rows: list) -> list:
     """Normalize org XLSX rows using column name mapping."""
     result = []
@@ -328,6 +362,10 @@ async def org_commit(file: UploadFile = File(...), db: Session = Depends(get_db)
     archived_count = 0
     errors = []
 
+    # Build set of all taken display names (for uniqueness)
+    all_people = db.query(Person).all()
+    taken_display_names = {p.display_name.lower() for p in all_people}
+
     # Pass 1: Create/update all people (without manager links)
     ext_to_person = dict(existing_by_ext)  # ext_id → Person
 
@@ -344,9 +382,14 @@ async def org_commit(file: UploadFile = File(...), db: Session = Depends(get_db)
             old_name = person.name
             if name and name != old_name:
                 person.name = name
-                # Only update display_name if it wasn't customized (still equals old name)
+                # Only update display_name if it wasn't customized
+                # "Not customized" = display_name equals old full name OR old auto-generated short name
                 if person.display_name == old_name:
-                    person.display_name = name
+                    # Re-generate unique short display name for the new name
+                    taken_display_names.discard(person.display_name.lower())
+                    new_dn = _generate_unique_display_name(name, taken_display_names)
+                    person.display_name = new_dn
+                    taken_display_names.add(new_dn.lower())
             if role:
                 person.role = role
             if location:
@@ -357,12 +400,14 @@ async def org_commit(file: UploadFile = File(...), db: Session = Depends(get_db)
                 from sqlalchemy.orm.attributes import flag_modified
                 flag_modified(person, "profile")
             person.import_source = "org_import"
-            # Unarchive if they were previously archived (returned to org)
             if person.is_archived:
                 person.is_archived = False
             updated_count += 1
         else:
-            # Create new person
+            # Create new person with unique short display name
+            display_name = _generate_unique_display_name(name, taken_display_names)
+            taken_display_names.add(display_name.lower())
+
             profile = {
                 "spouse": "", "anniversary": "", "children": [],
                 "pets": [], "birthday": "", "hobbies": "",
@@ -370,7 +415,7 @@ async def org_commit(file: UploadFile = File(...), db: Session = Depends(get_db)
             }
             person = Person(
                 name=name,
-                display_name=name,
+                display_name=display_name,
                 role=role,
                 reporting_level=ReportingLevel.ic,
                 import_source="org_import",
@@ -421,6 +466,24 @@ async def org_commit(file: UploadFile = File(...), db: Session = Depends(get_db)
                 person.reporting_level = ReportingLevel.manager
         else:
             person.reporting_level = ReportingLevel.ic
+
+    # Pass 5: Fix display names — re-generate short unique names for imported people
+    # whose display_name still equals their full name (not yet customized)
+    taken_dn = set()
+    # First collect all customized display names (those that differ from full name)
+    for person in ext_to_person.values():
+        if person.display_name != person.name:
+            taken_dn.add(person.display_name.lower())
+    # Also include manually-created people's display names
+    for p in all_people:
+        if not p.external_id:
+            taken_dn.add(p.display_name.lower())
+    # Now re-generate for those whose display_name == name
+    for person in ext_to_person.values():
+        if person.display_name == person.name:
+            new_dn = _generate_unique_display_name(person.name, taken_dn)
+            person.display_name = new_dn
+            taken_dn.add(new_dn.lower())
 
     db.commit()
     return {

@@ -79,7 +79,8 @@ export function useMentions() {
 
     const query = before.slice(triggerIndex + 1).toLowerCase();
 
-    if (query.includes(' ')) {
+    // For # hashtags, spaces end the mention (single-word tags)
+    if (prefix === '#' && query.includes(' ')) {
       setMentionQuery(null);
       setMentionResults([]);
       return;
@@ -91,6 +92,12 @@ export function useMentions() {
     setSelectedIndex(0);
 
     const results = prefix === '@' ? await buildAtResults(query) : buildHashResults(query);
+    // For @ mentions: close if query has content but no results (dead end)
+    if (prefix === '@' && query.length > 0 && results.length === 0) {
+      setMentionQuery(null);
+      setMentionResults([]);
+      return;
+    }
     setMentionResults(results);
   }, [buildAtResults, buildHashResults]);
 

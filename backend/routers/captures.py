@@ -38,41 +38,65 @@ def parse_shortcuts(text: str, db: Session):
             manual_type = type_map[tl]
             strip_fully.add(f"#{tag}")
 
-    # Parse @mentions — match against people display_name and project name/short_code
-    mentions = re.findall(r"@(\w+)", text)
-    for mention in mentions:
-        ml = mention.lower()
-        person = db.query(Person).filter(
-            Person.is_archived == False,
-            Person.display_name.ilike(ml)
-        ).first()
-        if person and person.id not in seen_people_ids:
-            linked_people.append(person)
-            seen_people_ids.add(person.id)
-            matched_mentions[f"@{mention}"] = True
+    # Parse @mentions — match against known people display_names and project names
+    # Supports multi-word display names like "John S" by matching longest known name after @
+    people = db.query(Person).filter(Person.is_archived == False).all()
+    projects = db.query(Project).filter(Project.is_archived == False).all()
+    people_dn_map = {p.display_name.lower(): p for p in people}  # display_name → Person
+    project_name_map = {}
+    for proj in projects:
+        project_name_map[proj.name.lower()] = proj
+        if proj.short_code:
+            project_name_map[proj.short_code.lower()] = proj
+
+    # Find all @ positions and try to match known names (longest match first)
+    at_positions = [i for i, c in enumerate(text) if c == '@']
+    for pos in at_positions:
+        # Must be at start or preceded by space/newline
+        if pos > 0 and text[pos - 1] not in (' ', '\n'):
             continue
-        project = db.query(Project).filter(
-            Project.is_archived == False,
-            or_(Project.short_code.ilike(ml), Project.name.ilike(ml))
-        ).first()
-        if project and project.id not in seen_project_ids:
-            linked_projects.append(project)
-            seen_project_ids.add(project.id)
-            matched_mentions[f"@{mention}"] = True
+        after = text[pos + 1:]
+        matched = False
+        # Try matching against people display names (longest first for best match)
+        for dn_lower, person in sorted(people_dn_map.items(), key=lambda x: -len(x[0])):
+            if after.lower().startswith(dn_lower) and person.id not in seen_people_ids:
+                # Ensure the match ends at a word boundary or end of string
+                end_pos = len(dn_lower)
+                if end_pos < len(after) and after[end_pos] not in (' ', ',', '.', '!', '?', '\n', ''):
+                    continue
+                linked_people.append(person)
+                seen_people_ids.add(person.id)
+                tag = text[pos:pos + 1 + len(dn_lower)]
+                matched_mentions[tag] = True
+                matched = True
+                break
+        if matched:
+            continue
+        # Try matching against project names/short_codes
+        for pn_lower, proj in sorted(project_name_map.items(), key=lambda x: -len(x[0])):
+            if after.lower().startswith(pn_lower) and proj.id not in seen_project_ids:
+                end_pos = len(pn_lower)
+                if end_pos < len(after) and after[end_pos] not in (' ', ',', '.', '!', '?', '\n', ''):
+                    continue
+                linked_projects.append(proj)
+                seen_project_ids.add(proj.id)
+                tag = text[pos:pos + 1 + len(pn_lower)]
+                matched_mentions[tag] = True
+                break
 
     # Detect leading @mentions: at start of text before any non-mention words
-    # "@John @Jim Need to check in" → leading=[@John, @Jim], rest="Need to check in"
     leading_mentions = set()
     stripped = text.lstrip()
     while stripped.startswith("@"):
-        m = re.match(r"@(\w+)\s*", stripped)
-        if not m:
-            break
-        tag = f"@{m.group(1)}"
-        if tag in matched_mentions:
-            leading_mentions.add(tag)
-            stripped = stripped[m.end():]
-        else:
+        # Try to match any known mention tag at the start
+        found_leading = False
+        for tag in sorted(matched_mentions.keys(), key=lambda t: -len(t)):
+            if stripped.startswith(tag):
+                leading_mentions.add(tag)
+                stripped = stripped[len(tag):].lstrip()
+                found_leading = True
+                break
+        if not found_leading:
             break
 
     # Strip metadata tags entirely (#todo, etc.)
