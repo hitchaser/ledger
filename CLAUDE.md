@@ -28,6 +28,8 @@ Live at: **https://ledger.hitchaser.com**
 
 **Person** — staff/contact profile.
 - Core fields: name, display_name, role, reporting_level, email, context_notes
+- external_id (String, unique, nullable) — org system unique identifier for import sync
+- import_source (String, nullable) — "org_import" or null for manually created
 - avatar (Text, base64 data URL for headshot)
 - profile (JSON): structured fields — spouse, anniversary, children[], pets[], birthday, hobbies, location, general
 - is_archived (bool)
@@ -85,6 +87,10 @@ Live at: **https://ledger.hitchaser.com**
 - **POST /api/captures** — create capture (parses #hashtag and @mention shortcuts)
 - **GET /api/captures** — list captures (filters: status, type, person_id, project_id, search, include_done; pagination: limit, offset; default: open items, sorted by pinned desc → sort_order asc → created_at desc)
 - **POST /api/captures/reorder** — set sort_order for items (body: {item_ids: [uuid...]})
+
+### People
+- **GET /api/people** — list people (pagination: limit, offset; filters: include_archived, search, my_org; returns {people: [], total: N})
+- **GET /api/people/search?q=&limit=10** — lightweight typeahead search (returns [{id, display_name, name, avatar, role}])
 - **PATCH /api/captures/:id** — update (raw_text, status, manual_type, manual_urgency, resolution_note, due_date, is_pinned, recurrence)
 - **DELETE /api/captures/:id** — delete capture
 - **POST/DELETE /api/captures/:id/link-person/:pid** — manage person links
@@ -314,6 +320,7 @@ frontend/
       CaptureBox.jsx   — Capture input with @mention/#hashtag autocomplete, search icon
       DailyDigest.jsx  — Digest page (overdue, today, upcoming, no date, stale, orphans)
       DraggableItemList.jsx — Shared drag-and-drop item list (HTML5 drag events, optimistic reorder)
+      PersonTypeahead.jsx — Reusable search-based person selector (debounced, replaces all dropdowns)
       Feed.jsx         — Main item feed with filters and digest banner
       ItemCard.jsx     — Item display (pin, due date, notes, predecessors, editable text, badges)
       Login.jsx        — Login page (glass theme)

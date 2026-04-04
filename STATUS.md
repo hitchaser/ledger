@@ -1,5 +1,52 @@
 # Ledger — Status
 
+## Phase 2b: Org Import & Scale — Deployed (2026-04-04)
+
+### XLSX Org Chart Import
+- [x] `external_id` + `import_source` fields on Person model
+- [x] Org import endpoints: preview (shows creates/updates/archives) and commit
+- [x] Column mapping: Unique Identifier→external_id, Name→name, Reports To→manager, Line Detail 1→role, Line Detail 2→location, Organization Name→reporting_level inference
+- [x] Sync logic: match by external_id, create new, update org fields, archive departed
+- [x] Never overwrites: display_name (if customized), profile data, avatars, context notes
+- [x] Two-pass: create/update first, then resolve manager references
+- [x] Reporting level auto-inference from tree structure (has reports→manager, no manager→executive, else ic)
+- [x] Import UI on Import/Export page with preview and diff display
+
+### Org Chart Focus Mode
+- [x] Route: /org-chart?focus=personId (defaults to owner)
+- [x] Auto-expand focused person's chain + direct reports + siblings
+- [x] Search box to find and focus on any person
+- [x] Breadcrumb trail showing focused person's management chain
+- [x] Focus ring highlight on the focused person's node
+- [x] Child count badge on collapsed nodes
+
+### Person Profile "See Org"
+- [x] "See Org" button navigates to /org-chart?focus={personId}
+
+### People Directory — Scale for 5000
+- [x] Pagination (50 per page with prev/next + count display)
+- [x] "My Org" / "All" toggle (defaults to My Org)
+- [x] Server-side search
+- [x] Batch open_item_count query (single GROUP BY instead of N+1)
+
+### PersonTypeahead Component
+- [x] Reusable search-based person selector (replaces all dropdowns)
+- [x] Debounced search via /api/people/search endpoint
+- [x] Used in: PersonProfile (manager), ProjectCard (team assignment)
+
+### Digest Optimization
+- [x] Stale contacts limited to "My Org" tree (not all 5000)
+
+### API Changes
+- [x] GET /api/people now returns {people: [], total: N} with pagination params
+- [x] GET /api/people/search — lightweight typeahead endpoint
+- [x] GET /api/org/tree?focus=id — org tree with expansion hints
+- [x] GET /api/org/my-org — owner's org tree person IDs
+- [x] POST /api/import-export/org-preview — org XLSX preview
+- [x] POST /api/import-export/org-commit — org XLSX commit
+
+---
+
 ## Phase 2: COMPLETE — Deployed (2026-04-04)
 
 ### AI & Classification
