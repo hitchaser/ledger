@@ -113,7 +113,7 @@ export default function Timeline() {
                     )}
                     {e.people?.length > 0 && (
                       <div className="flex gap-1 mt-1">
-                        {e.people.map(p => <span key={p.id} className="badge bg-indigo-500/10 text-indigo-400 border border-indigo-500/15">{p.display_name}</span>)}
+                        {e.people.map(p => <span key={p.id} title={p.name || p.display_name} className="badge bg-indigo-500/10 text-indigo-400 border border-indigo-500/15">{p.display_name}</span>)}
                       </div>
                     )}
                     {e.projects?.length > 0 && (

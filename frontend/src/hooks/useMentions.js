@@ -50,38 +50,11 @@ export function useMentions() {
   }, []);
 
   const buildHashResults = useCallback((query) => {
+    // # only shows type tags — people/projects are via @ only
     const results = [];
-    const isEmptyQuery = !query;
-
-    if (isEmptyQuery) {
-      // Show people and projects first when # typed with no query
-      for (const p of peopleRef.current) {
-        results.push({ type: 'person', id: p.id, name: p.display_name, fullName: p.name, detail: p.role || '', prefix: '#' });
-      }
-      for (const p of projectsRef.current) {
-        results.push({ type: 'project', id: p.id, name: p.name, detail: p.short_code || '', prefix: '#' });
-      }
-      // Then type shortcuts
-      for (const item of HASHTAG_TYPE_OPTIONS) {
+    for (const item of HASHTAG_TYPE_OPTIONS) {
+      if (!query || item.name.includes(query)) {
         results.push({ type: 'type', id: item.name, name: item.name, detail: item.detail, prefix: '#' });
-      }
-    } else {
-      // When query is non-empty, type shortcuts first (so #todo matches quickly)
-      for (const item of HASHTAG_TYPE_OPTIONS) {
-        if (item.name.includes(query)) {
-          results.push({ type: 'type', id: item.name, name: item.name, detail: item.detail, prefix: '#' });
-        }
-      }
-      // Then people/projects
-      for (const p of peopleRef.current) {
-        if (p.display_name.toLowerCase().includes(query) || p.name.toLowerCase().includes(query)) {
-          results.push({ type: 'person', id: p.id, name: p.display_name, fullName: p.name, detail: p.role || '', prefix: '#' });
-        }
-      }
-      for (const p of projectsRef.current) {
-        if (p.name.toLowerCase().includes(query) || (p.short_code || '').toLowerCase().includes(query)) {
-          results.push({ type: 'project', id: p.id, name: p.name, detail: p.short_code || '', prefix: '#' });
-        }
       }
     }
     return results.slice(0, 15);

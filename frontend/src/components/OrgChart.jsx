@@ -43,7 +43,7 @@ function OrgNode({ node, navigate, depth = 0 }) {
       >
         <div className="flex flex-col items-center gap-1">
           <Avatar src={node.avatar} name={node.display_name} size="sm" />
-          <div className="text-xs font-medium text-zinc-200 leading-tight">{node.display_name}</div>
+          <div className="text-xs font-medium text-zinc-200 leading-tight" title={node.name}>{node.display_name}</div>
           {node.role && <div className="text-[10px] text-zinc-500 leading-tight truncate w-full">{node.role}</div>}
         </div>
         {hasChildren && (

@@ -30,31 +30,13 @@ def parse_shortcuts(text: str, db: Session):
     strip_symbol = set()  # Tags to keep name but remove #/@ (@John → John)
     matched_mentions = {}  # @mention → person/project (for leading detection)
 
-    # Parse #hashtags (type or person/project fallback)
+    # Parse #hashtags (type tags only — people/projects use @ only)
     tags = re.findall(r"#(\w+)", text)
     for tag in tags:
         tl = tag.lower()
         if tl in type_map:
             manual_type = type_map[tl]
             strip_fully.add(f"#{tag}")
-        else:
-            person = db.query(Person).filter(
-                Person.is_archived == False,
-                Person.display_name.ilike(tl)
-            ).first()
-            if person and person.id not in seen_people_ids:
-                linked_people.append(person)
-                seen_people_ids.add(person.id)
-                strip_symbol.add(f"#{tag}")
-            else:
-                project = db.query(Project).filter(
-                    Project.is_archived == False,
-                    or_(Project.short_code.ilike(tl), Project.name.ilike(tl))
-                ).first()
-                if project and project.id not in seen_project_ids:
-                    linked_projects.append(project)
-                    seen_project_ids.add(project.id)
-                    strip_symbol.add(f"#{tag}")
 
     # Parse @mentions — match against people display_name and project name/short_code
     mentions = re.findall(r"@(\w+)", text)

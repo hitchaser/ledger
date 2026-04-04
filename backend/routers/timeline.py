@@ -21,12 +21,12 @@ def get_timeline(
     # Items created
     items = db.query(CaptureItem).filter(CaptureItem.created_at >= since).order_by(CaptureItem.created_at.desc()).all()
     for item in items:
-        people = [{"id": p.id, "display_name": p.display_name} for p in item.linked_people]
+        people = [{"id": p.id, "display_name": p.display_name, "name": p.name} for p in item.linked_people]
         projects = [{"id": p.id, "name": p.name, "short_code": p.short_code} for p in item.linked_projects]
         events.append({
             "type": "item_created",
             "timestamp": item.created_at.isoformat(),
-            "text": item.raw_text[:120],
+            "text": item.raw_text,
             "item_id": str(item.id),
             "item_type": (item.manual_type or item.item_type).value if (item.manual_type or item.item_type) else None,
             "people": people,
@@ -42,7 +42,7 @@ def get_timeline(
         events.append({
             "type": "item_resolved",
             "timestamp": item.resolved_at.isoformat(),
-            "text": item.raw_text[:120],
+            "text": item.raw_text,
             "item_id": str(item.id),
         })
 
@@ -84,7 +84,7 @@ def get_timeline(
         events.append({
             "type": log.log_type.value,
             "timestamp": log.created_at.isoformat(),
-            "text": f"{name}: {log.content[:100]}",
+            "text": f"{name}: {log.content}",
         })
 
     # Sort all events by timestamp descending
