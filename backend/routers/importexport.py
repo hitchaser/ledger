@@ -179,6 +179,53 @@ async def commit_import(file: UploadFile = File(...), db: Session = Depends(get_
     return {"created": created, "updated": updated, "errors": errors}
 
 
+def _find_import_roots(org_rows: list) -> set:
+    """Find root external_ids of the import — people whose reports_to is not in the file."""
+    all_ext_ids = {r["external_id"] for r in org_rows}
+    roots = set()
+    for r in org_rows:
+        reports_to = r.get("reports_to", "").strip()
+        if not reports_to or reports_to not in all_ext_ids:
+            roots.add(r["external_id"])
+    return roots
+
+
+def _get_subtree_ext_ids(db, root_ext_ids: set) -> set:
+    """Get all external_ids currently under the given root(s) in the DB. BFS tree walk."""
+    if not root_ext_ids:
+        return set()
+    # Load all org-imported people with external_ids
+    all_people = db.query(Person).filter(Person.external_id != None, Person.import_source == "org_import").all()
+    ext_to_id = {p.external_id: p.id for p in all_people}
+    id_to_ext = {p.id: p.external_id for p in all_people}
+    children_map = {}
+    for p in all_people:
+        if p.manager_id:
+            children_map.setdefault(p.manager_id, []).append(p.id)
+
+    # Find the Person IDs for our roots
+    root_person_ids = set()
+    for ext_id in root_ext_ids:
+        pid = ext_to_id.get(ext_id)
+        if pid:
+            root_person_ids.add(pid)
+
+    # BFS from roots
+    result_ext_ids = set()
+    queue = list(root_person_ids)
+    seen = set()
+    while queue:
+        current = queue.pop(0)
+        if current in seen:
+            continue
+        seen.add(current)
+        ext = id_to_ext.get(current)
+        if ext:
+            result_ext_ids.add(ext)
+        queue.extend(children_map.get(current, []))
+    return result_ext_ids
+
+
 def _parse_org_xlsx(rows: list) -> list:
     """Normalize org XLSX rows using column name mapping."""
     result = []
@@ -241,10 +288,16 @@ async def org_preview(file: UploadFile = File(...), db: Session = Depends(get_db
         else:
             creates.append({"external_id": ext_id, "name": name, "role": role, "location": location, "is_leader": is_leader})
 
-    # People with external_id not in import → departed
-    for ext_id, person in existing_by_ext.items():
-        if ext_id not in imported_ext_ids and not person.is_archived:
-            archives.append({"external_id": ext_id, "name": person.name, "display_name": person.display_name})
+    # Scope archive to the import's subtree only
+    import_roots = _find_import_roots(org_rows)
+    subtree_ext_ids = _get_subtree_ext_ids(db, import_roots)
+
+    # Departed = in the subtree but not in the new import
+    for ext_id in subtree_ext_ids:
+        if ext_id not in imported_ext_ids:
+            person = existing_by_ext.get(ext_id)
+            if person and not person.is_archived:
+                archives.append({"external_id": ext_id, "name": person.name, "display_name": person.display_name})
 
     return {
         "creates": creates,
@@ -343,11 +396,15 @@ async def org_commit(file: UploadFile = File(...), db: Session = Depends(get_db)
         elif person and not reports_to:
             person.manager_id = None
 
-    # Pass 3: Archive departed — people with org_import source whose ext_id is not in this import
-    for ext_id, person in existing_by_ext.items():
-        if ext_id not in imported_ext_ids and not person.is_archived:
-            person.is_archived = True
-            archived_count += 1
+    # Pass 3: Archive departed — scoped to the import's subtree only
+    import_roots = _find_import_roots(org_rows)
+    subtree_ext_ids = _get_subtree_ext_ids(db, import_roots)
+    for ext_id in subtree_ext_ids:
+        if ext_id not in imported_ext_ids:
+            person = existing_by_ext.get(ext_id)
+            if person and not person.is_archived:
+                person.is_archived = True
+                archived_count += 1
 
     # Pass 4: Infer reporting_level from tree structure
     # Anyone with direct reports is at least manager, top of tree is executive, rest is IC
