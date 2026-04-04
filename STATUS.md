@@ -1,5 +1,55 @@
 # Ledger — Status
 
+## Phase 2: COMPLETE — Deployed (2026-04-04)
+
+### AI & Classification
+- [x] Improved classification prompt: tasks no longer misclassified as profile_update
+- [x] AI now receives today's date for accurate due date calculation
+- [x] Urgency system removed — dates only (Overdue / Due Today / Upcoming / No Date)
+- [x] AI urgency=today auto-converted to due_date=today
+
+### Owner / Self Identity
+- [x] Settings: "I am..." dropdown to select yourself from people list
+- [x] Owner excluded from stale contacts in digest
+
+### Reporting Levels Simplified
+- [x] 3 values: Executive, Manager, Individual Contributor
+- [x] Migration: director→executive, employee/peer/other→ic
+
+### @Mention Improvements
+- [x] Leading @mentions stripped entirely (just tags): `@John @Jim Check in` → `Check in`
+- [x] Non-leading @mentions keep name: `Check with @John` → `Check with John`
+
+### UI Polish
+- [x] Light mode org chart collapse arrows (glass class)
+- [x] Settings model selector highlight fix (merged state update)
+- [x] Full name hover tooltip on person names everywhere
+- [x] Full name shown below display name on PersonProfile header
+- [x] Person name included in linked_people API response
+
+### Performance
+- [x] WebSocket item_updated merges into local state (no global re-render/re-fetch)
+- [x] Feed, PersonProfile, ProjectCard, MeetingMode all use local item merge
+
+### Hashtag Autocomplete
+- [x] Removed urgency hashtags (#today/#week/#month/#someday)
+- [x] People/projects shown first when # typed with empty query
+- [x] Result limit increased from 10 to 15
+
+### Timeline
+- [x] Expand/collapse for long event text (line-clamp-2 + toggle)
+
+### Drag and Drop Task Ordering
+- [x] sort_order column on CaptureItem
+- [x] POST /api/captures/reorder endpoint
+- [x] Query ordering: pinned → sort_order → created_at
+- [x] DraggableItemList shared component (HTML5 drag events)
+- [x] Used in Feed, PersonProfile, ProjectCard, MeetingMode
+- [x] Visual drag indicator (blue border on drag-over)
+- [x] Optimistic UI: reorder locally, sync to API
+
+---
+
 ## Phase 1: COMPLETE — In Pilot (2026-03-29)
 
 ### Core
@@ -12,7 +62,7 @@
 - [x] Capture box with @mention and #hashtag autocomplete
 - [x] AI classification via LiteLLM (Gemini Flash)
 - [x] Text-scan fallback linking
-- [x] Hashtag shortcuts (urgency, type, people, projects)
+- [x] Hashtag shortcuts (type, people, projects)
 
 ### Items
 - [x] Pin/star (pinned sort to top)
@@ -20,8 +70,7 @@
 - [x] Recurring items (daily/weekly/biweekly/monthly)
 - [x] Item notes/thread
 - [x] Predecessor/dependency links
-- [x] Editable text, type, urgency
-- [x] Auto-clear urgency when due date set
+- [x] Editable text, type
 - [x] Auto-resolve with undo
 
 ### People
@@ -36,7 +85,6 @@
 - [x] Context notes, short codes, status
 - [x] Team member assignments
 - [x] Auto-archive on complete/cancelled
-- [x] Status filter in directory
 
 ### Meetings
 - [x] Meeting Mode (two-column layout)
@@ -47,7 +95,7 @@
 
 ### Views
 - [x] Feed with filters, search, archive toggle
-- [x] Daily Digest (due-date-aware: overdue, today, upcoming, this week)
+- [x] Daily Digest (date-aware: overdue, today, upcoming, no date)
 - [x] Activity Timeline (7/14/30 day view with stats)
 - [x] Universal Search (items + notes + people + projects)
 
@@ -57,6 +105,7 @@
 - [x] Model presets dropdown
 - [x] Confidence thresholds
 - [x] API key management (masked)
+- [x] Owner identity selection
 
 ## Deployment
 - URL: https://ledger.hitchaser.com
@@ -68,4 +117,3 @@
 - Quick link from feed (+ button to attach person/project)
 - Notification/reminder system
 - Email/calendar integration
-- Drag and drop reordering

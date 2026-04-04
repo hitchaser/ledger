@@ -23,7 +23,7 @@ Live at: **https://ledger.hitchaser.com**
 - AI-populated fields: item_type, urgency, ai_confidence, ai_processed_at
 - Manual override fields: manual_type, manual_urgency
 - Effective type/urgency = manual if set, else AI
-- due_date (DateTime, AI-extracted or manual), is_pinned (bool), recurrence (string: daily/weekly/biweekly/monthly)
+- due_date (DateTime, AI-extracted or manual), is_pinned (bool), recurrence (string: daily/weekly/biweekly/monthly), sort_order (Integer, for drag-and-drop ordering)
 - Relations: linked_people, linked_projects, notes (ItemNote[]), predecessors (self-referential via item_links), meeting_session
 
 **Person** — staff/contact profile.
@@ -57,9 +57,9 @@ Live at: **https://ledger.hitchaser.com**
 
 ### Enums
 - ItemType: todo, followup, reminder, discussion, goal, profile_update, note
-- Urgency: today, this_week, this_month, someday
+- Urgency: today, this_week, this_month, someday (DEPRECATED — no longer used in AI or UI, kept in DB)
 - ItemStatus: open, done, dismissed
-- ReportingLevel: director, manager, employee, peer, other
+- ReportingLevel: executive, manager, ic (legacy: director, employee, peer, other — kept in DB enum but migrated)
 - ProjectStatus: active, on_hold, complete, cancelled
 - LinkSource: ai, manual, hashtag
 - LogType: meeting_summary, profile_update, manual_note
@@ -83,7 +83,8 @@ Live at: **https://ledger.hitchaser.com**
 
 ### Captures
 - **POST /api/captures** — create capture (parses #hashtag and @mention shortcuts)
-- **GET /api/captures** — list captures (filters: status, type, urgency, person_id, project_id, search, include_done; pagination: limit, offset; default: open items, sorted by pinned desc then created_at desc)
+- **GET /api/captures** — list captures (filters: status, type, person_id, project_id, search, include_done; pagination: limit, offset; default: open items, sorted by pinned desc → sort_order asc → created_at desc)
+- **POST /api/captures/reorder** — set sort_order for items (body: {item_ids: [uuid...]})
 - **PATCH /api/captures/:id** — update (raw_text, status, manual_type, manual_urgency, resolution_note, due_date, is_pinned, recurrence)
 - **DELETE /api/captures/:id** — delete capture
 - **POST/DELETE /api/captures/:id/link-person/:pid** — manage person links
@@ -120,12 +121,12 @@ Live at: **https://ledger.hitchaser.com**
 - **GET /api/meetings/prep/:entity_type/:entity_id** — meeting prep stats (last_meeting date, days_since, new_items, items_resolved, open_items)
 
 ### Digest
-- **GET /api/digest** — daily digest with due-date awareness:
-  - overdue_items: due_date in past OR urgency=today created before today
-  - today_items: due_date is today OR urgency=today created today
+- **GET /api/digest** �� daily digest with due-date awareness:
+  - overdue_items: due_date in past
+  - today_items: due_date is today
   - upcoming_items: due_date in next 7 days
-  - this_week_items/this_week_count: urgency-based, no due date
-  - stale_people: no linked items in 14+ days
+  - no_date_items/no_date_count: open items with no due_date
+  - stale_people: no linked items in 14+ days (owner excluded)
   - orphaned_items: open, no person or project links
 
 ### Search
@@ -185,6 +186,7 @@ Live at: **https://ledger.hitchaser.com**
 - **litellm_api_key** — LiteLLM API key (masked in UI)
 - **confidence_auto_resolve / confidence_suggest** — thresholds
 - **ai_enabled** — master toggle
+- **owner_person_id** — the user's own Person ID (excluded from stale contacts)
 - Settings cached 30s; cache cleared on save
 
 ## Frontend Architecture
@@ -218,8 +220,8 @@ Live at: **https://ledger.hitchaser.com**
 - **Login** — obsidian/glass themed login page
 
 ### Capture Box Features
-- @mention autocomplete → links person (strips @ symbol, keeps name)
-- #hashtag shortcuts: #today/#week/#month/#someday (urgency), #todo/#followup/#reminder/#goal/#note/#discussion (type), #personname/#projectcode (links)
+- @mention autocomplete → links person (leading @mentions stripped entirely, non-leading strip @ keep name)
+- #hashtag shortcuts: #todo/#followup/#reminder/#goal/#note/#discussion (type), #personname/#projectcode (links)
 - Search icon opens QuickSearch
 - Text submitted → parsed for shortcuts → CaptureItem created → AIJob queued
 
@@ -310,7 +312,8 @@ frontend/
       Avatar.jsx       — Avatar display component
       AvatarUpload.jsx — Avatar upload (base64)
       CaptureBox.jsx   — Capture input with @mention/#hashtag autocomplete, search icon
-      DailyDigest.jsx  — Digest page (overdue, today, upcoming, this_week, stale, orphans)
+      DailyDigest.jsx  — Digest page (overdue, today, upcoming, no date, stale, orphans)
+      DraggableItemList.jsx — Shared drag-and-drop item list (HTML5 drag events, optimistic reorder)
       Feed.jsx         — Main item feed with filters and digest banner
       ItemCard.jsx     — Item display (pin, due date, notes, predecessors, editable text, badges)
       Login.jsx        — Login page (glass theme)
