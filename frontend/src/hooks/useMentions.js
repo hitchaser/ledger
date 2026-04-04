@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { api } from '../api/client';
 
 const HASHTAG_TYPE_OPTIONS = [
@@ -11,46 +11,38 @@ const HASHTAG_TYPE_OPTIONS = [
 ];
 
 export function useMentions() {
-  const peopleRef = useRef([]);
   const projectsRef = useRef([]);
   const [mentionQuery, setMentionQuery] = useState(null);
   const [mentionResults, setMentionResults] = useState([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const mentionStartPos = useRef(null);
-  const mentionPrefix = useRef(null); // '@' or '#'
-  const lastMentionState = useRef(false);
+  const mentionPrefix = useRef(null);
+  const projectsLoaded = useRef(false);
 
-  useEffect(() => {
-    api.listPeople({ limit: 5000 }).then(r => { peopleRef.current = r.people || r; }).catch(() => {});
-    api.listProjects().then(p => { projectsRef.current = p; }).catch(() => {});
+  const ensureProjects = useCallback(async () => {
+    if (!projectsLoaded.current) {
+      projectsRef.current = await api.listProjects().catch(() => []);
+      projectsLoaded.current = true;
+    }
   }, []);
 
-  const refreshLists = useCallback(async () => {
-    const [pRes, pr] = await Promise.all([
-      api.listPeople({ limit: 5000 }).catch(() => ({ people: [] })),
-      api.listProjects().catch(() => []),
-    ]);
-    peopleRef.current = pRes.people || pRes;
-    projectsRef.current = pr;
-  }, []);
-
-  const buildAtResults = useCallback((query) => {
+  const buildAtResults = useCallback(async (query) => {
+    await ensureProjects();
+    // Use the search API for people — fast even with 5000
+    const people = await api.searchPeople(query, 8).catch(() => []);
     const results = [];
-    for (const p of peopleRef.current) {
-      if (p.display_name.toLowerCase().includes(query) || p.name.toLowerCase().includes(query)) {
-        results.push({ type: 'person', id: p.id, name: p.display_name, fullName: p.name, detail: p.role || '', prefix: '@' });
-      }
+    for (const p of people) {
+      results.push({ type: 'person', id: p.id, name: p.display_name, fullName: p.name, detail: p.role || '', prefix: '@' });
     }
     for (const p of projectsRef.current) {
-      if (p.name.toLowerCase().includes(query) || (p.short_code || '').toLowerCase().includes(query)) {
+      if (!query || p.name.toLowerCase().includes(query) || (p.short_code || '').toLowerCase().includes(query)) {
         results.push({ type: 'project', id: p.id, name: p.name, detail: p.short_code || '', prefix: '@' });
       }
     }
-    return results.slice(0, 8);
-  }, []);
+    return results.slice(0, 10);
+  }, [ensureProjects]);
 
   const buildHashResults = useCallback((query) => {
-    // # only shows type tags — people/projects are via @ only
     const results = [];
     for (const item of HASHTAG_TYPE_OPTIONS) {
       if (!query || item.name.includes(query)) {
@@ -63,13 +55,11 @@ export function useMentions() {
   const updateMention = useCallback(async (text, cursorPos) => {
     const before = text.slice(0, cursorPos);
 
-    // Check for @ or # trigger
     let triggerIndex = -1;
     let prefix = null;
     const atIndex = before.lastIndexOf('@');
     const hashIndex = before.lastIndexOf('#');
 
-    // Pick the closest trigger to cursor
     if (atIndex > hashIndex) {
       triggerIndex = atIndex;
       prefix = '@';
@@ -84,7 +74,6 @@ export function useMentions() {
     if (triggerIndex === -1 || (triggerIndex > 0 && before[triggerIndex - 1] !== ' ' && before[triggerIndex - 1] !== '\n' && triggerIndex !== 0)) {
       setMentionQuery(null);
       setMentionResults([]);
-      lastMentionState.current = false;
       return;
     }
 
@@ -93,21 +82,17 @@ export function useMentions() {
     if (query.includes(' ')) {
       setMentionQuery(null);
       setMentionResults([]);
-      lastMentionState.current = false;
       return;
-    }
-
-    if (!lastMentionState.current) {
-      await refreshLists();
-      lastMentionState.current = true;
     }
 
     mentionStartPos.current = triggerIndex;
     mentionPrefix.current = prefix;
     setMentionQuery(query);
     setSelectedIndex(0);
-    setMentionResults(prefix === '@' ? buildAtResults(query) : buildHashResults(query));
-  }, [refreshLists, buildAtResults, buildHashResults]);
+
+    const results = prefix === '@' ? await buildAtResults(query) : buildHashResults(query);
+    setMentionResults(results);
+  }, [buildAtResults, buildHashResults]);
 
   const selectMention = useCallback((text, item) => {
     const triggerIndex = mentionStartPos.current;
@@ -117,11 +102,10 @@ export function useMentions() {
     const afterTrigger = text.slice(triggerIndex + 1);
     const spaceIdx = afterTrigger.indexOf(' ');
     const after = spaceIdx >= 0 ? afterTrigger.slice(spaceIdx) : '';
-    const insertName = item.prefix === '#' ? item.name.replace(/\s+/g, '') : item.name.replace(/\s+/g, '');
+    const insertName = item.name.replace(/\s+/g, '');
     const newText = `${before}${prefix}${insertName}${after ? after : ' '}`;
     setMentionQuery(null);
     setMentionResults([]);
-    lastMentionState.current = false;
     return newText;
   }, []);
 
@@ -150,7 +134,6 @@ export function useMentions() {
     if (e.key === 'Escape') {
       setMentionQuery(null);
       setMentionResults([]);
-      lastMentionState.current = false;
       return true;
     }
     return false;

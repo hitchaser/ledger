@@ -132,6 +132,8 @@ export const api = {
 
   // Org Chart
   getOrgTree: (focus = null) => request(`/org/tree${focus ? '?focus=' + focus : ''}`),
+  getFocusedTree: (focus = null) => request(`/org/focused-tree${focus ? '?focus=' + focus : ''}`),
+  getOrgChildren: (personId) => request(`/org/children/${personId}`),
   getOrgChain: (personId) => request(`/org/chain/${personId}`),
   getMyOrgIds: () => request('/org/my-org'),
 

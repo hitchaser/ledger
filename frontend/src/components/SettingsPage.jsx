@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { api } from '../api/client';
 import { Save, Sun, Moon, User } from 'lucide-react';
+import PersonTypeahead from './PersonTypeahead';
 
 const MODEL_PRESETS = [
   { group: 'LiteLLM (Cloud)', provider: 'litellm', models: [
@@ -102,11 +103,9 @@ export default function SettingsPage({ theme, onToggleTheme }) {
   const [settings, setSettings] = useState(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [people, setPeople] = useState([]);
 
   useEffect(() => {
     api.getSettings().then(setSettings).catch(console.error);
-    api.listPeople({ limit: 5000 }).then(r => setPeople(r.people || r)).catch(console.error);
   }, []);
 
   const save = async () => {
@@ -162,14 +161,11 @@ export default function SettingsPage({ theme, onToggleTheme }) {
         <h3 className="text-sm font-medium text-zinc-300 mb-3 flex items-center gap-1.5"><User size={14} /> Identity</h3>
         <div>
           <label className="text-xs text-zinc-500 mb-1 block">I am...</label>
-          <select
-            value={settings.owner_person_id || ''}
-            onChange={e => setSettings(s => ({ ...s, owner_person_id: e.target.value }))}
-            className="w-full glass-input rounded px-3 py-2 text-sm text-zinc-300 outline-none"
-          >
-            <option value="">Not set</option>
-            {people.map(p => <option key={p.id} value={p.id}>{p.display_name} ({p.name})</option>)}
-          </select>
+          <PersonTypeahead
+            value={settings.owner_person_id || null}
+            onChange={(p) => setSettings(s => ({ ...s, owner_person_id: p?.id || '' }))}
+            placeholder="Search for yourself..."
+          />
           <p className="text-xs text-zinc-600 mt-1">Select yourself to exclude from stale contacts and other self-references</p>
         </div>
       </div>

@@ -116,6 +116,137 @@ def get_my_org(db: Session = Depends(get_db)):
     return {"person_ids": [str(pid) for pid in org_ids]}
 
 
+@router.get("/focused-tree")
+def get_focused_tree(focus: Optional[str] = Query(None), db: Session = Depends(get_db)):
+    """Return a lightweight tree for the focused person's context only.
+    Returns: chain to root (each with siblings), focused person's direct reports (with child counts).
+    This avoids sending all 5000 nodes."""
+
+    # Resolve focus — default to owner
+    focus_id = focus
+    if not focus_id:
+        owner_setting = db.query(Setting).filter(Setting.key == "owner_person_id").first()
+        if owner_setting and owner_setting.value:
+            focus_id = owner_setting.value
+
+    if not focus_id:
+        return {"nodes": [], "focus_id": None, "total": 0}
+
+    # Load all people as lightweight rows (id, name, display_name, role, avatar, manager_id, reporting_level)
+    all_people = db.query(Person).filter(Person.is_archived == False).all()
+    total = len(all_people)
+    lookup = {}
+    children_map = {}  # parent_id → [child Person]
+    for p in all_people:
+        lookup[str(p.id)] = p
+        mid = str(p.manager_id) if p.manager_id else None
+        if mid:
+            children_map.setdefault(mid, []).append(p)
+
+    focus_person = lookup.get(focus_id)
+    if not focus_person:
+        return {"nodes": [], "focus_id": focus_id, "total": total}
+
+    def person_node(p, include_children=False):
+        pid = str(p.id)
+        direct_reports = children_map.get(pid, [])
+        node = {
+            "id": pid,
+            "display_name": p.display_name,
+            "name": p.name,
+            "role": p.role,
+            "avatar": p.avatar,
+            "reporting_level": p.reporting_level.value if p.reporting_level else "other",
+            "manager_id": str(p.manager_id) if p.manager_id else None,
+            "child_count": len(direct_reports),
+        }
+        if include_children:
+            node["children"] = sorted(
+                [person_node(c) for c in direct_reports],
+                key=lambda n: n["display_name"]
+            )
+        return node
+
+    # Build the chain from focus to root
+    chain = []
+    current = focus_person
+    seen = set()
+    while current and str(current.id) not in seen:
+        seen.add(str(current.id))
+        chain.append(current)
+        if current.manager_id:
+            current = lookup.get(str(current.manager_id))
+        else:
+            current = None
+    chain.reverse()  # root first
+
+    # Build the result: each chain member gets its siblings shown,
+    # and the focused person gets children expanded
+    nodes = []
+    for i, person in enumerate(chain):
+        pid = str(person.id)
+        is_focus = (pid == focus_id)
+        mid = str(person.manager_id) if person.manager_id else None
+
+        # Add siblings (same manager) for context
+        if mid:
+            siblings = sorted(children_map.get(mid, []), key=lambda p: p.display_name)
+        else:
+            # Root level — show all roots
+            siblings = sorted([p for p in all_people if not p.manager_id], key=lambda p: p.display_name)
+
+        for sib in siblings:
+            sid = str(sib.id)
+            in_chain = sid in {str(c.id) for c in chain}
+            is_this_focus = (sid == focus_id)
+            node = person_node(sib, include_children=is_this_focus)
+            node["depth"] = i
+            node["in_chain"] = in_chain
+            node["is_focus"] = is_this_focus
+            node["expanded"] = is_this_focus or in_chain
+            nodes.append(node)
+
+    return {
+        "nodes": nodes,
+        "focus_id": focus_id,
+        "chain": [str(c.id) for c in chain],
+        "total": total,
+    }
+
+
+@router.get("/children/{person_id}")
+def get_org_children(person_id: UUID, db: Session = Depends(get_db)):
+    """Return direct children of a person — for lazy loading on expand."""
+    children = db.query(Person).filter(
+        Person.manager_id == person_id,
+        Person.is_archived == False,
+    ).order_by(Person.display_name).all()
+
+    # Get child counts for each child
+    all_ids = [c.id for c in children]
+    child_counts = {}
+    if all_ids:
+        from sqlalchemy import func
+        counts = db.query(
+            Person.manager_id, func.count(Person.id)
+        ).filter(
+            Person.manager_id.in_(all_ids),
+            Person.is_archived == False,
+        ).group_by(Person.manager_id).all()
+        child_counts = dict(counts)
+
+    return [{
+        "id": str(c.id),
+        "display_name": c.display_name,
+        "name": c.name,
+        "role": c.role,
+        "avatar": c.avatar,
+        "reporting_level": c.reporting_level.value if c.reporting_level else "other",
+        "manager_id": str(c.manager_id) if c.manager_id else None,
+        "child_count": child_counts.get(c.id, 0),
+    } for c in children]
+
+
 @router.get("/chain/{person_id}")
 def get_org_chain(person_id: UUID, db: Session = Depends(get_db)):
     """Return the management chain for a person (bottom to top)."""
