@@ -64,6 +64,8 @@ export default function Timeline() {
   const [data, setData] = useState(null);
   const [days, setDays] = useState(7);
 
+  useEffect(() => { api.getTimeline(days).then(setData).catch(console.error); }, [days]);
+
   if (!data) return <div className="p-8 text-zinc-600">Loading timeline...</div>;
 
   const grouped = groupByDate(data.events);
