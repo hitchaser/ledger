@@ -96,7 +96,7 @@ export default function PersonTypeahead({ value, onChange, exclude = [], placeho
         className="w-full glass-input rounded px-3 py-1.5 text-sm text-zinc-200 outline-none"
       />
       {open && results.length > 0 && (
-        <div className="absolute z-50 top-full left-0 right-0 mt-1 glass rounded-lg border border-white/10 max-h-48 overflow-y-auto shadow-xl">
+        <div className="absolute z-50 top-full left-0 right-0 mt-1 rounded-lg border border-white/10 max-h-48 overflow-y-auto shadow-xl bg-zinc-900/95 backdrop-blur-xl">
           {results.map((p, idx) => (
             <button
               key={p.id}
