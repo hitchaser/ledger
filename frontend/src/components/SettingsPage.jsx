@@ -157,7 +157,7 @@ export default function SettingsPage({ theme, onToggleTheme }) {
       </div>
 
       {/* Identity */}
-      <div className="glass rounded-lg p-4 mb-4">
+      <div className="glass rounded-lg p-4 mb-4 relative z-20 overflow-visible">
         <h3 className="text-sm font-medium text-zinc-300 mb-3 flex items-center gap-1.5"><User size={14} /> Identity</h3>
         <div>
           <label className="text-xs text-zinc-500 mb-1 block">I am...</label>
