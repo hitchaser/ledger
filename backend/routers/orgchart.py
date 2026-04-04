@@ -118,11 +118,10 @@ def get_my_org(db: Session = Depends(get_db)):
 
 @router.get("/focused-tree")
 def get_focused_tree(focus: Optional[str] = Query(None), db: Session = Depends(get_db)):
-    """Return a lightweight tree for the focused person's context only.
-    Returns: chain to root (each with siblings), focused person's direct reports (with child counts).
-    This avoids sending all 5000 nodes."""
+    """Return a nested tree for the focused person's context only.
+    Returns siblings at each chain level, with the focused person's direct reports expanded.
+    Typically ~30-100 nodes instead of all 5000."""
 
-    # Resolve focus — default to owner
     focus_id = focus
     if not focus_id:
         owner_setting = db.query(Setting).filter(Setting.key == "owner_person_id").first()
@@ -130,13 +129,12 @@ def get_focused_tree(focus: Optional[str] = Query(None), db: Session = Depends(g
             focus_id = owner_setting.value
 
     if not focus_id:
-        return {"nodes": [], "focus_id": None, "total": 0}
+        return {"tree": [], "focus_id": None, "chain": [], "total": 0}
 
-    # Load all people as lightweight rows (id, name, display_name, role, avatar, manager_id, reporting_level)
     all_people = db.query(Person).filter(Person.is_archived == False).all()
     total = len(all_people)
     lookup = {}
-    children_map = {}  # parent_id → [child Person]
+    children_map = {}
     for p in all_people:
         lookup[str(p.id)] = p
         mid = str(p.manager_id) if p.manager_id else None
@@ -145,12 +143,11 @@ def get_focused_tree(focus: Optional[str] = Query(None), db: Session = Depends(g
 
     focus_person = lookup.get(focus_id)
     if not focus_person:
-        return {"nodes": [], "focus_id": focus_id, "total": total}
+        return {"tree": [], "focus_id": focus_id, "chain": [], "total": total}
 
-    def person_node(p, include_children=False):
+    def person_node(p):
         pid = str(p.id)
-        direct_reports = children_map.get(pid, [])
-        node = {
+        return {
             "id": pid,
             "display_name": p.display_name,
             "name": p.name,
@@ -158,16 +155,11 @@ def get_focused_tree(focus: Optional[str] = Query(None), db: Session = Depends(g
             "avatar": p.avatar,
             "reporting_level": p.reporting_level.value if p.reporting_level else "other",
             "manager_id": str(p.manager_id) if p.manager_id else None,
-            "child_count": len(direct_reports),
+            "child_count": len(children_map.get(pid, [])),
+            "children": None,  # null = not loaded, [] = loaded but empty
         }
-        if include_children:
-            node["children"] = sorted(
-                [person_node(c) for c in direct_reports],
-                key=lambda n: n["display_name"]
-            )
-        return node
 
-    # Build the chain from focus to root
+    # Build chain from focus to root
     chain = []
     current = focus_person
     seen = set()
@@ -179,35 +171,42 @@ def get_focused_tree(focus: Optional[str] = Query(None), db: Session = Depends(g
         else:
             current = None
     chain.reverse()  # root first
+    chain_ids = {str(c.id) for c in chain}
 
-    # Build the result: each chain member gets its siblings shown,
-    # and the focused person gets children expanded
-    nodes = []
-    for i, person in enumerate(chain):
+    # Build nested tree: at each chain level, include siblings.
+    # Chain members have their children populated (next level of siblings).
+    # The focus person has direct reports populated.
+    def build_level(chain_idx):
+        """Build the sibling list for chain[chain_idx], with the chain member expanded."""
+        if chain_idx >= len(chain):
+            return []
+        person = chain[chain_idx]
         pid = str(person.id)
-        is_focus = (pid == focus_id)
         mid = str(person.manager_id) if person.manager_id else None
 
-        # Add siblings (same manager) for context
         if mid:
             siblings = sorted(children_map.get(mid, []), key=lambda p: p.display_name)
         else:
-            # Root level — show all roots
             siblings = sorted([p for p in all_people if not p.manager_id], key=lambda p: p.display_name)
 
+        result = []
         for sib in siblings:
+            node = person_node(sib)
             sid = str(sib.id)
-            in_chain = sid in {str(c.id) for c in chain}
-            is_this_focus = (sid == focus_id)
-            node = person_node(sib, include_children=is_this_focus)
-            node["depth"] = i
-            node["in_chain"] = in_chain
-            node["is_focus"] = is_this_focus
-            node["expanded"] = is_this_focus or in_chain
-            nodes.append(node)
+            if sid in chain_ids and chain_idx + 1 < len(chain):
+                # This sibling is in the chain — expand it with the next level
+                node["children"] = build_level(chain_idx + 1)
+            elif sid == focus_id:
+                # Focus person — show direct reports
+                reports = sorted(children_map.get(sid, []), key=lambda p: p.display_name)
+                node["children"] = [person_node(r) for r in reports]
+            result.append(node)
+        return result
+
+    tree = build_level(0)
 
     return {
-        "nodes": nodes,
+        "tree": tree,
         "focus_id": focus_id,
         "chain": [str(c.id) for c in chain],
         "total": total,
