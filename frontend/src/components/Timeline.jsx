@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import { api } from '../api/client';
 import { Clock, CheckCircle, Users, FileText, MessageSquare, ChevronDown, ChevronUp } from 'lucide-react';
 
@@ -39,12 +39,13 @@ function ClampedText({ text, eventKey }) {
   const [isClamped, setIsClamped] = useState(false);
   const textRef = useRef(null);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const el = textRef.current;
-    if (el) {
-      // Check if text is actually overflowing when clamped
-      setIsClamped(el.scrollHeight > el.clientHeight);
-    }
+    if (!el) return;
+    // Force layout read after clamp styles are applied
+    requestAnimationFrame(() => {
+      if (el) setIsClamped(el.scrollHeight > el.clientHeight + 1);
+    });
   }, [text]);
 
   return (
