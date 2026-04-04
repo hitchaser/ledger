@@ -63,6 +63,19 @@ if "import_source" not in _people_cols:
     with engine.begin() as conn:
         conn.execute(sa_text("ALTER TABLE people ADD COLUMN import_source VARCHAR"))
     logger.info("Migrated people table: added import_source")
+
+# One-time: reset org-imported display names back to full name
+# (previous import used shortened "First L" format, now we use full names)
+try:
+    with engine.begin() as conn:
+        result = conn.execute(sa_text(
+            "UPDATE people SET display_name = name "
+            "WHERE import_source = 'org_import' AND display_name != name"
+        ))
+        if result.rowcount > 0:
+            logger.info(f"Reset {result.rowcount} org-imported display names to full names")
+except Exception as e:
+    logger.warning(f"Display name reset skipped: {e}")
 if "avatar" not in _people_cols:
     with engine.begin() as conn:
         conn.execute(sa_text("ALTER TABLE people ADD COLUMN avatar TEXT"))
