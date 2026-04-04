@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import ItemCard from './ItemCard';
 import DraggableItemList from './DraggableItemList';
+import PersonTypeahead from './PersonTypeahead';
 import { ArrowLeft, Play, Edit3, Save, Plus, Settings, X, Archive, ArchiveRestore, Trash2, Users } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import Avatar from './Avatar';
@@ -19,7 +20,7 @@ export default function ProjectCard({ refreshKey, onRefresh, itemUpdate }) {
   const [notes, setNotes] = useState('');
   const [addNote, setAddNote] = useState('');
   const [editingDetails, setEditingDetails] = useState(false);
-  const [availablePeople, setAvailablePeople] = useState([]);
+  // availablePeople removed — using PersonTypeahead instead
   const [showAddPerson, setShowAddPerson] = useState(false);
   const [detailsForm, setDetailsForm] = useState({ name: '', short_code: '', status: '' });
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -33,7 +34,7 @@ export default function ProjectCard({ refreshKey, onRefresh, itemUpdate }) {
     api.getProjectItems(id, 'open').then(setItems);
     api.getProjectItems(id, 'done').then(setCompletedItems);
     api.getProjectLogs(id).then(setLogs);
-    api.listPeople().then(setAvailablePeople);
+    // People loaded via PersonTypeahead search instead
   }, [id, refreshKey]);
 
   // Merge WebSocket item updates
@@ -215,14 +216,19 @@ export default function ProjectCard({ refreshKey, onRefresh, itemUpdate }) {
           <span className="text-xs text-zinc-700 italic">No team members assigned</span>
         )}
         {showAddPerson && (
-          <div className="flex flex-wrap gap-1.5 mt-2">
-            {availablePeople.filter(pe => !project.people?.some(pp => pp.id === pe.id)).map(pe => (
-              <button key={pe.id} onClick={async () => { await api.linkProjectPerson(id, pe.id); const u = await api.getProject(id); setProject(u); setShowAddPerson(false); }}
-                className="badge glass glass-hover text-zinc-400 hover:text-zinc-200 cursor-pointer flex items-center gap-1">
-                <Avatar src={pe.avatar} name={pe.display_name} size="xs" />
-                + {pe.display_name}
-              </button>
-            ))}
+          <div className="mt-2">
+            <PersonTypeahead
+              onChange={async (person) => {
+                if (person) {
+                  await api.linkProjectPerson(id, person.id);
+                  const u = await api.getProject(id);
+                  setProject(u);
+                  setShowAddPerson(false);
+                }
+              }}
+              exclude={project.people?.map(p => p.id) || []}
+              placeholder="Search for team member..."
+            />
           </div>
         )}
       </div>

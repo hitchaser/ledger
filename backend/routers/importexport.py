@@ -17,11 +17,24 @@ from models import (
 router = APIRouter(prefix="/api/import-export", tags=["import-export"])
 
 REPORTING_LEVEL_MAP = {
-    "director": ReportingLevel.director,
+    "executive": ReportingLevel.executive,
+    "director": ReportingLevel.executive,
     "manager": ReportingLevel.manager,
-    "employee": ReportingLevel.employee,
-    "peer": ReportingLevel.peer,
-    "other": ReportingLevel.other,
+    "employee": ReportingLevel.ic,
+    "ic": ReportingLevel.ic,
+    "peer": ReportingLevel.ic,
+    "other": ReportingLevel.ic,
+}
+
+# ── Column name mappings for org XLSX import ──
+ORG_COL_MAP = {
+    "unique identifier": "external_id",
+    "name": "name",
+    "reports to": "reports_to",
+    "line detail 1": "role",
+    "line detail 2": "location",
+    "line detail 3": "_unused",
+    "organization name": "org_name",
 }
 
 
@@ -164,6 +177,202 @@ async def commit_import(file: UploadFile = File(...), db: Session = Depends(get_
 
     db.commit()
     return {"created": created, "updated": updated, "errors": errors}
+
+
+def _parse_org_xlsx(rows: list) -> list:
+    """Normalize org XLSX rows using column name mapping."""
+    result = []
+    for row in rows:
+        mapped = {}
+        for col_name, value in row.items():
+            key = ORG_COL_MAP.get(col_name.strip().lower(), col_name.strip().lower())
+            mapped[key] = (value or "").strip()
+        if mapped.get("external_id") and mapped.get("name"):
+            result.append(mapped)
+    return result
+
+
+@router.post("/org-preview")
+async def org_preview(file: UploadFile = File(...), db: Session = Depends(get_db)):
+    """Preview org chart XLSX import — shows creates, updates, archives."""
+    content = await file.read()
+    rows = _parse_file(file.filename, content)
+    if not rows:
+        raise HTTPException(400, "No data found in file")
+
+    org_rows = _parse_org_xlsx(rows)
+    if not org_rows:
+        raise HTTPException(400, "No valid rows found. Expected columns: Unique Identifier, Name, Reports To, Line Detail 1, Line Detail 2, Organization Name")
+
+    # Load existing people with external_ids
+    existing_by_ext = {p.external_id: p for p in db.query(Person).filter(Person.external_id != None).all()}
+    imported_ext_ids = {r["external_id"] for r in org_rows}
+
+    creates = []
+    updates = []
+    unchanged = 0
+    archives = []
+    errors = []
+
+    for r in org_rows:
+        ext_id = r["external_id"]
+        name = r.get("name", "")
+        role = r.get("role", "")
+        location = r.get("location", "")
+        reports_to = r.get("reports_to", "")
+        org_name = r.get("org_name", "")
+        is_leader = bool(org_name)
+
+        person = existing_by_ext.get(ext_id)
+        if person:
+            # Check what would change
+            changes = {}
+            if name and name != person.name:
+                changes["name"] = {"from": person.name, "to": name}
+            if role and role != (person.role or ""):
+                changes["role"] = {"from": person.role or "", "to": role}
+            profile = person.profile or {}
+            if location and location != profile.get("location", ""):
+                changes["location"] = {"from": profile.get("location", ""), "to": location}
+            if changes:
+                updates.append({"external_id": ext_id, "name": name, "changes": changes, "is_leader": is_leader})
+            else:
+                unchanged += 1
+        else:
+            creates.append({"external_id": ext_id, "name": name, "role": role, "location": location, "is_leader": is_leader})
+
+    # People with external_id not in import → departed
+    for ext_id, person in existing_by_ext.items():
+        if ext_id not in imported_ext_ids and not person.is_archived:
+            archives.append({"external_id": ext_id, "name": person.name, "display_name": person.display_name})
+
+    return {
+        "creates": creates,
+        "updates": updates,
+        "archives": archives,
+        "unchanged_count": unchanged,
+        "errors": errors,
+        "total_rows": len(org_rows),
+    }
+
+
+@router.post("/org-commit")
+async def org_commit(file: UploadFile = File(...), db: Session = Depends(get_db)):
+    """Commit org chart XLSX import — creates, updates, archives people."""
+    content = await file.read()
+    rows = _parse_file(file.filename, content)
+    if not rows:
+        raise HTTPException(400, "No data found in file")
+
+    org_rows = _parse_org_xlsx(rows)
+    if not org_rows:
+        raise HTTPException(400, "No valid org rows found")
+
+    existing_by_ext = {p.external_id: p for p in db.query(Person).filter(Person.external_id != None).all()}
+    imported_ext_ids = {r["external_id"] for r in org_rows}
+    created_count = 0
+    updated_count = 0
+    archived_count = 0
+    errors = []
+
+    # Pass 1: Create/update all people (without manager links)
+    ext_to_person = dict(existing_by_ext)  # ext_id → Person
+
+    for r in org_rows:
+        ext_id = r["external_id"]
+        name = r.get("name", "").strip()
+        role = r.get("role", "").strip()
+        location = r.get("location", "").strip()
+        org_name = r.get("org_name", "").strip()
+
+        person = ext_to_person.get(ext_id)
+        if person:
+            # Update org fields only — preserve user-customized data
+            old_name = person.name
+            if name and name != old_name:
+                person.name = name
+                # Only update display_name if it wasn't customized (still equals old name)
+                if person.display_name == old_name:
+                    person.display_name = name
+            if role:
+                person.role = role
+            if location:
+                import copy
+                profile = copy.deepcopy(person.profile or {})
+                profile["location"] = location
+                person.profile = profile
+                from sqlalchemy.orm.attributes import flag_modified
+                flag_modified(person, "profile")
+            person.import_source = "org_import"
+            # Unarchive if they were previously archived (returned to org)
+            if person.is_archived:
+                person.is_archived = False
+            updated_count += 1
+        else:
+            # Create new person
+            profile = {
+                "spouse": "", "anniversary": "", "children": [],
+                "pets": [], "birthday": "", "hobbies": "",
+                "location": location, "address": "", "general": ""
+            }
+            person = Person(
+                name=name,
+                display_name=name,
+                role=role,
+                reporting_level=ReportingLevel.ic,
+                import_source="org_import",
+                external_id=ext_id,
+                profile=profile,
+            )
+            db.add(person)
+            db.flush()
+            ext_to_person[ext_id] = person
+            created_count += 1
+
+    # Pass 2: Resolve manager references via external_id
+    for r in org_rows:
+        ext_id = r["external_id"]
+        reports_to = r.get("reports_to", "").strip()
+        person = ext_to_person.get(ext_id)
+        if person and reports_to:
+            manager = ext_to_person.get(reports_to)
+            if manager:
+                person.manager_id = manager.id
+            else:
+                errors.append(f"Manager ext_id '{reports_to}' not found for '{person.name}'")
+        elif person and not reports_to:
+            person.manager_id = None
+
+    # Pass 3: Archive departed — people with org_import source whose ext_id is not in this import
+    for ext_id, person in existing_by_ext.items():
+        if ext_id not in imported_ext_ids and not person.is_archived:
+            person.is_archived = True
+            archived_count += 1
+
+    # Pass 4: Infer reporting_level from tree structure
+    # Anyone with direct reports is at least manager, top of tree is executive, rest is IC
+    has_reports = set()
+    for person in ext_to_person.values():
+        if person.manager_id:
+            has_reports.add(person.manager_id)
+
+    for person in ext_to_person.values():
+        if person.id in has_reports:
+            if not person.manager_id:
+                person.reporting_level = ReportingLevel.executive
+            else:
+                person.reporting_level = ReportingLevel.manager
+        else:
+            person.reporting_level = ReportingLevel.ic
+
+    db.commit()
+    return {
+        "created": created_count,
+        "updated": updated_count,
+        "archived": archived_count,
+        "errors": errors,
+        "total": len(org_rows),
+    }
 
 
 def _parse_file(filename: str, content: bytes) -> list:

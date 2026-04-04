@@ -33,8 +33,13 @@ export const api = {
   unlinkProject: (itemId, projectId) => request(`/captures/${itemId}/link-project/${projectId}`, { method: 'DELETE' }),
 
   // People
-  listPeople: (includeArchived = false) => request(`/people${includeArchived ? '?include_archived=true' : ''}`),
-  listAllPeople: () => request('/people?include_archived=true'),
+  listPeople: (params = {}) => {
+    if (typeof params === 'boolean') params = params ? { include_archived: 'true' } : {};
+    const qs = new URLSearchParams(params).toString();
+    return request(`/people${qs ? '?' + qs : ''}`);
+  },
+  listAllPeople: () => request('/people?include_archived=true&limit=10000'),
+  searchPeople: (q, limit = 10) => request(`/people/search?q=${encodeURIComponent(q)}&limit=${limit}`),
   createPerson: (data) => request('/people', { method: 'POST', body: JSON.stringify(data) }),
   getPerson: (id) => request(`/people/${id}`),
   updatePerson: (id, data) => request(`/people/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
@@ -87,7 +92,25 @@ export const api = {
   // Meeting Prep
   getMeetingPrep: (type, id) => request(`/meetings/prep/${type}/${id}`),
 
-  // Import/Export
+  // Import/Export — Org XLSX
+  previewOrgImport: async (file) => {
+    const form = new FormData();
+    form.append('file', file);
+    const res = await fetch('/api/import-export/org-preview', { method: 'POST', body: form });
+    if (res.status === 401) { window.location.reload(); throw new Error('Session expired'); }
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  },
+  commitOrgImport: async (file) => {
+    const form = new FormData();
+    form.append('file', file);
+    const res = await fetch('/api/import-export/org-commit', { method: 'POST', body: form });
+    if (res.status === 401) { window.location.reload(); throw new Error('Session expired'); }
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  },
+
+  // Import/Export — Generic CSV
   previewImport: async (file) => {
     const form = new FormData();
     form.append('file', file);
@@ -108,8 +131,9 @@ export const api = {
   exportBackup: () => '/api/import-export/export/backup',
 
   // Org Chart
-  getOrgTree: () => request('/org/tree'),
+  getOrgTree: (focus = null) => request(`/org/tree${focus ? '?focus=' + focus : ''}`),
   getOrgChain: (personId) => request(`/org/chain/${personId}`),
+  getMyOrgIds: () => request('/org/my-org'),
 
   // Settings
   getSettings: () => request('/settings'),

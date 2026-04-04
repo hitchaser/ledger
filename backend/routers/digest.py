@@ -62,9 +62,13 @@ def get_digest(db: Session = Depends(get_db)):
         except (ValueError, AttributeError):
             pass
 
-    # Stale people: no linked items in 14+ days (exclude owner)
+    # Stale people: no linked items in 14+ days (limit to my org, exclude owner)
     fourteen_days_ago = now - timedelta(days=14)
+    from routers.people import _get_my_org_ids
+    my_org_ids = _get_my_org_ids(db)
     people_query = db.query(Person).filter(Person.is_archived == False)
+    if my_org_ids:
+        people_query = people_query.filter(Person.id.in_(my_org_ids))
     if owner_person_id:
         people_query = people_query.filter(Person.id != owner_person_id)
     all_people = people_query.all()

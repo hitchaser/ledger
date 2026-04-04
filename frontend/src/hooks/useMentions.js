@@ -21,16 +21,16 @@ export function useMentions() {
   const lastMentionState = useRef(false);
 
   useEffect(() => {
-    api.listPeople().then(p => { peopleRef.current = p; }).catch(() => {});
+    api.listPeople({ limit: 5000 }).then(r => { peopleRef.current = r.people || r; }).catch(() => {});
     api.listProjects().then(p => { projectsRef.current = p; }).catch(() => {});
   }, []);
 
   const refreshLists = useCallback(async () => {
-    const [p, pr] = await Promise.all([
-      api.listPeople().catch(() => []),
+    const [pRes, pr] = await Promise.all([
+      api.listPeople({ limit: 5000 }).catch(() => ({ people: [] })),
       api.listProjects().catch(() => []),
     ]);
-    peopleRef.current = p;
+    peopleRef.current = pRes.people || pRes;
     projectsRef.current = pr;
   }, []);
 

@@ -53,6 +53,16 @@ except Exception as e:
     logger.warning(f"Reporting level migration skipped: {e}")
 
 _people_cols = [c["name"] for c in _insp.get_columns("people")]
+if "external_id" not in _people_cols:
+    with engine.begin() as conn:
+        conn.execute(sa_text("ALTER TABLE people ADD COLUMN external_id VARCHAR"))
+        conn.execute(sa_text("CREATE UNIQUE INDEX ix_people_external_id ON people(external_id) WHERE external_id IS NOT NULL"))
+    logger.info("Migrated people table: added external_id with unique index")
+
+if "import_source" not in _people_cols:
+    with engine.begin() as conn:
+        conn.execute(sa_text("ALTER TABLE people ADD COLUMN import_source VARCHAR"))
+    logger.info("Migrated people table: added import_source")
 if "avatar" not in _people_cols:
     with engine.begin() as conn:
         conn.execute(sa_text("ALTER TABLE people ADD COLUMN avatar TEXT"))

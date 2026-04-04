@@ -106,7 +106,7 @@ export default function SettingsPage({ theme, onToggleTheme }) {
 
   useEffect(() => {
     api.getSettings().then(setSettings).catch(console.error);
-    api.listPeople().then(setPeople).catch(console.error);
+    api.listPeople({ limit: 5000 }).then(r => setPeople(r.people || r)).catch(console.error);
   }, []);
 
   const save = async () => {

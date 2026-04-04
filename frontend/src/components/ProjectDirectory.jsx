@@ -20,7 +20,7 @@ export default function ProjectDirectory({ refreshKey }) {
   const [people, setPeople] = useState([]);
 
   useEffect(() => { api.listProjects(showArchived).then(setProjects).catch(console.error); }, [refreshKey, showArchived]);
-  useEffect(() => { api.listPeople().then(setPeople).catch(console.error); }, []);
+  useEffect(() => { api.listPeople({ limit: 5000 }).then(r => setPeople(r.people || r)).catch(console.error); }, []);
 
   const filtered = projects.filter(p => {
     const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase()) ||

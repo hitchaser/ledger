@@ -1,10 +1,11 @@
 from uuid import UUID
-from fastapi import APIRouter, Depends, HTTPException
+from typing import Optional
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 
 from database import get_db
-from models import Person, Project as ProjectModel, PersonProject, CaptureItem, CaptureItemPerson, ProfileLog, ItemStatus, ReportingLevel
-from schemas import PersonCreate, PersonUpdate, PersonResponse, ProfileLogResponse
+from models import Person, Project as ProjectModel, PersonProject, CaptureItem, CaptureItemPerson, ProfileLog, ItemStatus, ReportingLevel, Setting
 
 router = APIRouter(prefix="/api/people", tags=["people"])
 
@@ -15,11 +16,14 @@ DEFAULT_PROFILE = {
     "address": "", "general": ""
 }
 
-def person_response(p: Person, db: Session) -> dict:
-    count = db.query(CaptureItemPerson).join(CaptureItem).filter(
-        CaptureItemPerson.person_id == p.id,
-        CaptureItem.status == ItemStatus.open
-    ).count()
+def person_response(p: Person, db: Session, open_count_map: dict = None) -> dict:
+    if open_count_map is not None:
+        count = open_count_map.get(p.id, 0)
+    else:
+        count = db.query(CaptureItemPerson).join(CaptureItem).filter(
+            CaptureItemPerson.person_id == p.id,
+            CaptureItem.status == ItemStatus.open
+        ).count()
     profile = {**DEFAULT_PROFILE, **(p.profile or {})}
     manager_info = None
     if p.manager_id and p.manager:
@@ -31,19 +35,109 @@ def person_response(p: Person, db: Session) -> dict:
         "is_archived": p.is_archived, "context_notes": p.context_notes or "",
         "profile": profile, "avatar": p.avatar,
         "manager_id": p.manager_id, "manager": manager_info,
+        "external_id": p.external_id,
+        "import_source": p.import_source,
         "open_item_count": count,
         "projects": [{"id": pr.id, "name": pr.name, "short_code": pr.short_code} for pr in (p.projects or []) if not pr.is_archived],
     }
 
 
+def _get_my_org_ids(db: Session) -> set:
+    """Get person IDs in the owner's org tree (downward walk)."""
+    owner_setting = db.query(Setting).filter(Setting.key == "owner_person_id").first()
+    if not owner_setting or not owner_setting.value:
+        return set()
+    try:
+        owner_id = UUID(owner_setting.value)
+    except (ValueError, AttributeError):
+        return set()
+    # Load all people (id, manager_id) in one query and walk in-memory
+    all_rows = db.query(Person.id, Person.manager_id).filter(Person.is_archived == False).all()
+    children_map = {}
+    for pid, mid in all_rows:
+        if mid:
+            children_map.setdefault(mid, []).append(pid)
+    result = set()
+    queue = [owner_id]
+    while queue:
+        current = queue.pop(0)
+        if current in result:
+            continue
+        result.add(current)
+        queue.extend(children_map.get(current, []))
+    return result
+
+
+def _batch_open_counts(db: Session, person_ids: list = None) -> dict:
+    """Get open item counts for people in a single query."""
+    q = db.query(
+        CaptureItemPerson.person_id,
+        func.count(CaptureItemPerson.capture_item_id)
+    ).join(CaptureItem).filter(
+        CaptureItem.status == ItemStatus.open
+    )
+    if person_ids is not None:
+        q = q.filter(CaptureItemPerson.person_id.in_(person_ids))
+    return dict(q.group_by(CaptureItemPerson.person_id).all())
+
+
+@router.get("/search")
+def search_people(
+    q: str = Query("", min_length=0),
+    limit: int = Query(10),
+    db: Session = Depends(get_db),
+):
+    """Lightweight search for typeahead — minimal response payload."""
+    query = db.query(Person).filter(Person.is_archived == False)
+    if q:
+        term = f"%{q}%"
+        from sqlalchemy import or_
+        query = query.filter(or_(
+            Person.display_name.ilike(term),
+            Person.name.ilike(term),
+            Person.role.ilike(term),
+        ))
+    people = query.order_by(Person.display_name).limit(limit).all()
+    return [{"id": p.id, "display_name": p.display_name, "name": p.name, "avatar": p.avatar, "role": p.role} for p in people]
+
+
 @router.get("")
-def list_people(include_archived: bool = False, db: Session = Depends(get_db)):
+def list_people(
+    include_archived: bool = False,
+    search: Optional[str] = Query(None),
+    my_org: bool = Query(False),
+    limit: int = Query(50),
+    offset: int = Query(0),
+    db: Session = Depends(get_db),
+):
     q = db.query(Person)
     if not include_archived:
         q = q.filter(Person.is_archived == False)
-    people = q.order_by(Person.display_name).all()
-    return [person_response(p, db) for p in people]
+    if search:
+        term = f"%{search}%"
+        from sqlalchemy import or_
+        q = q.filter(or_(
+            Person.display_name.ilike(term),
+            Person.name.ilike(term),
+            Person.role.ilike(term),
+        ))
+    if my_org:
+        org_ids = _get_my_org_ids(db)
+        if org_ids:
+            q = q.filter(Person.id.in_(org_ids))
+        # If no owner set, fall through to show all
 
+    total = q.count()
+    people = q.order_by(Person.display_name).offset(offset).limit(limit).all()
+
+    # Batch open item counts
+    person_ids = [p.id for p in people]
+    count_map = _batch_open_counts(db, person_ids)
+
+    return {"people": [person_response(p, db, count_map) for p in people], "total": total}
+
+
+from schemas import PersonCreate, PersonUpdate, PersonResponse
 
 @router.post("", response_model=PersonResponse)
 def create_person(body: PersonCreate, db: Session = Depends(get_db)):
@@ -95,7 +189,6 @@ def delete_person(person_id: UUID, db: Session = Depends(get_db)):
         raise HTTPException(404, "Not found")
     if not p.is_archived:
         raise HTTPException(400, "Person must be archived before deleting")
-    # Remove junction table links
     db.query(CaptureItemPerson).filter(CaptureItemPerson.person_id == person_id).delete()
     db.query(ProfileLog).filter(ProfileLog.person_id == person_id).delete()
     db.delete(p)
@@ -127,7 +220,7 @@ def get_person_items(person_id: UUID, status: str = "open", db: Session = Depend
     q = db.query(CaptureItem).join(CaptureItemPerson).filter(CaptureItemPerson.person_id == person_id)
     if status:
         q = q.filter(CaptureItem.status == status)
-    items = q.order_by(CaptureItem.created_at.desc()).all()
+    items = q.order_by(CaptureItem.is_pinned.desc().nullslast(), CaptureItem.sort_order.asc().nullslast(), CaptureItem.created_at.desc()).all()
     return [item_to_response(i) for i in items]
 
 

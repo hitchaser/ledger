@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api/client';
-import { UserPlus, Search, Archive } from 'lucide-react';
+import { UserPlus, Search, Archive, Users, Building2, ChevronLeft, ChevronRight } from 'lucide-react';
 import Avatar from './Avatar';
 
 const LEVEL_COLORS = {
@@ -11,12 +11,16 @@ const LEVEL_COLORS = {
 };
 
 const LEVEL_LABELS = { executive: 'Executive', manager: 'Manager', ic: 'IC' };
+const PAGE_SIZE = 50;
 
 export default function PeopleDirectory({ refreshKey }) {
   const [people, setPeople] = useState([]);
+  const [total, setTotal] = useState(0);
   const [projects, setProjects] = useState([]);
   const [search, setSearch] = useState('');
   const [showArchived, setShowArchived] = useState(false);
+  const [scope, setScope] = useState('my_org');
+  const [page, setPage] = useState(0);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({
     name: '', display_name: '', role: '', reporting_level: 'ic',
@@ -24,18 +28,28 @@ export default function PeopleDirectory({ refreshKey }) {
     selectedProjectIds: [],
   });
 
-  useEffect(() => { api.listPeople(showArchived).then(setPeople).catch(console.error); }, [refreshKey, showArchived]);
+  useEffect(() => {
+    const params = {
+      limit: PAGE_SIZE,
+      offset: page * PAGE_SIZE,
+    };
+    if (showArchived) params.include_archived = 'true';
+    if (search) params.search = search;
+    if (scope === 'my_org') params.my_org = 'true';
+    api.listPeople(params).then(r => {
+      setPeople(r.people || r);
+      setTotal(r.total || (r.people || r).length);
+    }).catch(console.error);
+  }, [refreshKey, showArchived, search, scope, page]);
+
   useEffect(() => { api.listProjects().then(setProjects).catch(console.error); }, []);
+  useEffect(() => { setPage(0); }, [search, scope, showArchived]);
+
   const displayNameDupe = (() => {
     const dn = (form.display_name || form.name).trim().toLowerCase();
     if (!dn) return null;
     return people.find(p => p.display_name.toLowerCase() === dn);
   })();
-
-  const filtered = people.filter(p =>
-    p.display_name.toLowerCase().includes(search.toLowerCase()) ||
-    p.name.toLowerCase().includes(search.toLowerCase())
-  );
 
   const handleCreate = async (e) => {
     e.preventDefault();
@@ -47,21 +61,27 @@ export default function PeopleDirectory({ refreshKey }) {
     };
     const { selectedProjectIds, ...personData } = form;
     const newPerson = await api.createPerson({ ...personData, display_name: form.display_name || form.name, profile: profileData });
-    // Link selected projects
     for (const projId of selectedProjectIds) {
       await api.linkPersonProject(newPerson.id, projId);
     }
-    setForm({ name: '', display_name: '', role: '', reporting_level: 'employee',
+    setForm({ name: '', display_name: '', role: '', reporting_level: 'ic',
       profile: { spouse: '', anniversary: '', children: '', pets: '', birthday: '', hobbies: '', location: '', general: '' },
       selectedProjectIds: [] });
     setShowForm(false);
-    api.listPeople(showArchived).then(setPeople);
+    setPage(0);
   };
+
+  const totalPages = Math.ceil(total / PAGE_SIZE);
+  const showingFrom = page * PAGE_SIZE + 1;
+  const showingTo = Math.min((page + 1) * PAGE_SIZE, total);
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-4">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold text-zinc-200">People</h2>
+        <div className="flex items-center gap-3">
+          <h2 className="text-lg font-semibold text-zinc-200">People</h2>
+          <span className="text-xs text-zinc-600">{total}</span>
+        </div>
         <button onClick={() => setShowForm(!showForm)}
           className="flex items-center gap-1.5 text-xs glass glass-hover rounded-lg px-3 py-1.5 text-zinc-400 hover:text-zinc-200 transition-all">
           <UserPlus size={14} /> Add Person
@@ -142,6 +162,16 @@ export default function PeopleDirectory({ refreshKey }) {
           <input type="text" placeholder="Search people..." value={search} onChange={e => setSearch(e.target.value)}
             className="w-full glass-input rounded-lg pl-8 pr-3 py-2 text-sm text-zinc-300 outline-none" />
         </div>
+        <div className="flex gap-1">
+          <button onClick={() => setScope('my_org')}
+            className={`flex items-center gap-1 text-xs px-2 py-1 rounded transition-all ${scope === 'my_org' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' : 'glass text-zinc-500 hover:text-zinc-300'}`}>
+            <Users size={12} /> My Org
+          </button>
+          <button onClick={() => setScope('all')}
+            className={`flex items-center gap-1 text-xs px-2 py-1 rounded transition-all ${scope === 'all' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' : 'glass text-zinc-500 hover:text-zinc-300'}`}>
+            <Building2 size={12} /> All
+          </button>
+        </div>
         <label className="flex items-center gap-1.5 text-xs text-zinc-600 cursor-pointer whitespace-nowrap">
           <input type="checkbox" checked={showArchived} onChange={e => setShowArchived(e.target.checked)} className="rounded" />
           <Archive size={12} /> Archived
@@ -149,7 +179,7 @@ export default function PeopleDirectory({ refreshKey }) {
       </div>
 
       <div className="flex flex-col gap-1">
-        {filtered.map(p => (
+        {people.map(p => (
           <Link key={p.id} to={`/people/${p.id}`}
             className="flex items-center justify-between px-3 py-2.5 rounded-lg hover:bg-white/[0.04] transition-all">
             <div className="flex items-center gap-3">
@@ -168,8 +198,25 @@ export default function PeopleDirectory({ refreshKey }) {
             </div>
           </Link>
         ))}
-        {filtered.length === 0 && <div className="text-center text-zinc-700 py-8 text-sm">No people found</div>}
+        {people.length === 0 && <div className="text-center text-zinc-700 py-8 text-sm">No people found</div>}
       </div>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between mt-4 pt-3 border-t border-white/[0.06]">
+          <span className="text-xs text-zinc-600">{showingFrom}–{showingTo} of {total}</span>
+          <div className="flex gap-1">
+            <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0}
+              className="p-1 glass rounded text-zinc-500 hover:text-zinc-300 disabled:opacity-30 transition-all">
+              <ChevronLeft size={14} />
+            </button>
+            <button onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1}
+              className="p-1 glass rounded text-zinc-500 hover:text-zinc-300 disabled:opacity-30 transition-all">
+              <ChevronRight size={14} />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -4,7 +4,8 @@ import { api } from '../api/client';
 import ItemCard from './ItemCard';
 import DraggableItemList from './DraggableItemList';
 import AvatarUpload from './AvatarUpload';
-import { ArrowLeft, Play, Edit3, Save, Plus, Settings, X, Archive, ArchiveRestore, Trash2, FolderKanban } from 'lucide-react';
+import PersonTypeahead from './PersonTypeahead';
+import { ArrowLeft, Play, Edit3, Save, Plus, Settings, X, Archive, ArchiveRestore, Trash2, FolderKanban, GitBranch } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 const DEFAULT_PROFILE = {
@@ -40,7 +41,7 @@ export default function PersonProfile({ refreshKey, onRefresh, itemUpdate }) {
   const [detailsForm, setDetailsForm] = useState({ name: '', display_name: '', role: '', reporting_level: '', email: '', manager_id: '' });
   const [editingProfile, setEditingProfile] = useState(false);
   const [profileForm, setProfileForm] = useState({ ...DEFAULT_PROFILE });
-  const [allPeople, setAllPeople] = useState([]);
+  const [allPeople, setAllPeople] = useState([]); // For display name dupe check
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [quickNote, setQuickNote] = useState('');
   const [availableProjects, setAvailableProjects] = useState([]);
@@ -55,7 +56,7 @@ export default function PersonProfile({ refreshKey, onRefresh, itemUpdate }) {
     api.getPersonItems(id, 'open').then(setItems);
     api.getPersonItems(id, 'done').then(setCompletedItems);
     api.getPersonLogs(id).then(setLogs);
-    api.listPeople().then(setAllPeople);
+    api.listPeople({ limit: 5000 }).then(r => setAllPeople(r.people || r));
     api.listProjects().then(setAvailableProjects);
   }, [id, refreshKey]);
 
@@ -171,6 +172,10 @@ export default function PersonProfile({ refreshKey, onRefresh, itemUpdate }) {
               <Trash2 size={14} /> Delete
             </button>
           )}
+          <button onClick={() => navigate(`/org-chart?focus=${id}`)}
+            className="flex items-center gap-1.5 text-xs glass glass-hover rounded-lg px-3 py-2 text-zinc-500 hover:text-zinc-200 transition-all">
+            <GitBranch size={14} /> See Org
+          </button>
           <button onClick={toggleArchive}
             className="flex items-center gap-1.5 text-xs glass glass-hover rounded-lg px-3 py-2 text-zinc-500 hover:text-zinc-200 transition-all">
             {person.is_archived ? <><ArchiveRestore size={14} /> Restore</> : <><Archive size={14} /> Archive</>}
@@ -220,13 +225,12 @@ export default function PersonProfile({ refreshKey, onRefresh, itemUpdate }) {
             </div>
             <div>
               <label className="text-xs text-zinc-600 mb-0.5 block">Reports To</label>
-              <select value={detailsForm.manager_id || ''} onChange={e => setDetailsForm({...detailsForm, manager_id: e.target.value})}
-                className="w-full glass-input rounded px-3 py-1.5 text-sm text-zinc-300 outline-none">
-                <option value="">None</option>
-                {allPeople.filter(p => p.id !== id).map(p => (
-                  <option key={p.id} value={p.id}>{p.display_name}</option>
-                ))}
-              </select>
+              <PersonTypeahead
+                value={detailsForm.manager_id || null}
+                onChange={(p) => setDetailsForm({...detailsForm, manager_id: p?.id || ''})}
+                exclude={[id]}
+                placeholder="Search for manager..."
+              />
             </div>
             {detailsDisplayNameDupe && (
               <div className="col-span-2 p-2 rounded bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs">
