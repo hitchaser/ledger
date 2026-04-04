@@ -227,29 +227,8 @@ def _get_subtree_ext_ids(db, root_ext_ids: set) -> set:
 
 
 def _generate_unique_display_name(full_name: str, taken_names: set) -> str:
-    """Generate a short unique display name from a full name.
-    Strategy: FirstName LastInitial → FirstName La → FirstName Las → ... → Full Name → Full Name 2"""
-    parts = full_name.strip().split()
-    if len(parts) < 2:
-        candidate = full_name.strip()
-        if candidate.lower() not in taken_names:
-            return candidate
-        for i in range(2, 100):
-            c = f"{candidate} {i}"
-            if c.lower() not in taken_names:
-                return c
-        return candidate
-
-    first = parts[0]
-    last = " ".join(parts[1:])
-
-    # Try "First L", "First La", "First Las", ... up to full last name
-    for length in range(1, len(last) + 1):
-        candidate = f"{first} {last[:length]}"
-        if candidate.lower() not in taken_names:
-            return candidate
-
-    # Full name is taken — append number
+    """Generate a unique display name from a full name.
+    Uses the full name as-is. If duplicate, appends a number: John Smith → John Smith 2."""
     candidate = full_name.strip()
     if candidate.lower() not in taken_names:
         return candidate
