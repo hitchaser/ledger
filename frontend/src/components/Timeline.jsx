@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { api } from '../api/client';
 import { Clock, CheckCircle, Users, FileText, MessageSquare, ChevronDown, ChevronUp } from 'lucide-react';
 
@@ -34,21 +34,35 @@ function groupByDate(events) {
   return Object.entries(groups);
 }
 
+function ClampedText({ text, eventKey }) {
+  const [expanded, setExpanded] = useState(false);
+  const [isClamped, setIsClamped] = useState(false);
+  const textRef = useRef(null);
+
+  useEffect(() => {
+    const el = textRef.current;
+    if (el) {
+      // Check if text is actually overflowing when clamped
+      setIsClamped(el.scrollHeight > el.clientHeight);
+    }
+  }, [text]);
+
+  return (
+    <>
+      <p ref={textRef} className={`text-sm text-zinc-300 ${!expanded ? 'line-clamp-2' : ''}`}>{text}</p>
+      {isClamped && (
+        <button onClick={() => setExpanded(!expanded)}
+          className="flex items-center gap-0.5 text-xs text-zinc-600 hover:text-zinc-400 mt-0.5 transition-colors">
+          {expanded ? <><ChevronUp size={12} /> Less</> : <><ChevronDown size={12} /> More</>}
+        </button>
+      )}
+    </>
+  );
+}
+
 export default function Timeline() {
   const [data, setData] = useState(null);
   const [days, setDays] = useState(7);
-  const [expandedEvents, setExpandedEvents] = useState(new Set());
-
-  useEffect(() => { api.getTimeline(days).then(setData).catch(console.error); }, [days]);
-
-  const toggleExpand = (key) => {
-    setExpandedEvents(prev => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-  };
 
   if (!data) return <div className="p-8 text-zinc-600">Loading timeline...</div>;
 
@@ -97,20 +111,11 @@ export default function Timeline() {
             {events.map((e, i) => {
               const cfg = EVENT_ICONS[e.type] || EVENT_ICONS.item_created;
               const Icon = cfg.icon;
-              const eventKey = `${date}-${i}`;
-              const isLong = e.text && e.text.length > 100;
-              const isExpanded = expandedEvents.has(eventKey);
               return (
                 <div key={i} className="flex items-start gap-3 glass rounded-lg px-3 py-2">
                   <Icon size={14} className={`mt-0.5 flex-shrink-0 ${cfg.color}`} />
                   <div className="flex-1 min-w-0">
-                    <p className={`text-sm text-zinc-300 ${isLong && !isExpanded ? 'line-clamp-2' : ''}`}>{e.text}</p>
-                    {isLong && (
-                      <button onClick={() => toggleExpand(eventKey)}
-                        className="flex items-center gap-0.5 text-xs text-zinc-600 hover:text-zinc-400 mt-0.5 transition-colors">
-                        {isExpanded ? <><ChevronUp size={12} /> Less</> : <><ChevronDown size={12} /> More</>}
-                      </button>
-                    )}
+                    <ClampedText text={e.text} eventKey={`${date}-${i}`} />
                     {e.people?.length > 0 && (
                       <div className="flex gap-1 mt-1">
                         {e.people.map(p => <span key={p.id} title={p.name || p.display_name} className="badge bg-indigo-500/10 text-indigo-400 border border-indigo-500/15">{p.display_name}</span>)}
