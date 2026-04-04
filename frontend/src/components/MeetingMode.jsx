@@ -2,12 +2,13 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import ItemCard from './ItemCard';
+import DraggableItemList from './DraggableItemList';
 import { useMentions } from '../hooks/useMentions';
 import MentionDropdown from './MentionDropdown';
 import { Square, Send, Copy, Save, X } from 'lucide-react';
 import Avatar from './Avatar';
 
-export default function MeetingMode({ refreshKey, onRefresh }) {
+export default function MeetingMode({ refreshKey, onRefresh, itemUpdate }) {
   const { type, id } = useParams();
   const navigate = useNavigate();
   const [entity, setEntity] = useState(null);
@@ -54,10 +55,15 @@ export default function MeetingMode({ refreshKey, onRefresh }) {
     };
   }, [loadData]);
 
-  // Reload items when AI classification completes (via WebSocket → refreshKey)
+  // Merge WebSocket item updates into local state instead of full reload
   useEffect(() => {
-    if (refreshKey > 0) loadData();
-  }, [refreshKey, loadData]);
+    if (!itemUpdate) return;
+    setItems(prev => {
+      const idx = prev.findIndex(i => i.id === itemUpdate.id);
+      if (idx >= 0) { const u = [...prev]; u[idx] = itemUpdate; return u; }
+      return prev;
+    });
+  }, [itemUpdate]);
 
   const capture = async () => {
     const t = captureText.trim();
@@ -141,7 +147,7 @@ export default function MeetingMode({ refreshKey, onRefresh }) {
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
             {isPerson && <Avatar src={entity.avatar} name={entity.display_name || entity.name} size="lg" />}
-            <h2 className="text-lg font-bold text-zinc-100">{entity.display_name || entity.name}</h2>
+            <h2 className="text-lg font-bold text-zinc-100" title={entity.name}>{entity.display_name || entity.name}</h2>
           </div>
           <button onClick={endMeeting} disabled={ending || !session}
             className="flex items-center gap-1 text-xs bg-rose-500/20 hover:bg-rose-500/30 text-rose-400 rounded px-3 py-1.5 border border-rose-500/20 disabled:opacity-40 transition-all">
@@ -250,12 +256,7 @@ export default function MeetingMode({ refreshKey, onRefresh }) {
 
       <div className="flex-1 overflow-y-auto p-4">
         <h3 className="text-sm font-semibold text-zinc-400 mb-3">Open Items</h3>
-        <div className="flex flex-col gap-2 mb-4">
-          {items.length === 0 && <p className="text-sm text-zinc-700">No open items</p>}
-          {items.map(item => (
-            <ItemCard key={item.id} item={item} onUpdate={() => { onRefresh?.(); loadData(); }} compact />
-          ))}
-        </div>
+        <DraggableItemList items={items} setItems={setItems} onUpdate={() => { onRefresh?.(); loadData(); }} compact />
 
         <div className="relative mt-4 pt-4 border-t border-white/[0.06]">
           <div className="flex items-center gap-2">

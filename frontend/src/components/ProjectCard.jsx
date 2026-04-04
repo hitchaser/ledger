@@ -2,11 +2,12 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import ItemCard from './ItemCard';
+import DraggableItemList from './DraggableItemList';
 import { ArrowLeft, Play, Edit3, Save, Plus, Settings, X, Archive, ArchiveRestore, Trash2, Users } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import Avatar from './Avatar';
 
-export default function ProjectCard({ refreshKey, onRefresh }) {
+export default function ProjectCard({ refreshKey, onRefresh, itemUpdate }) {
   const { id } = useParams();
   const navigate = useNavigate();
   const [project, setProject] = useState(null);
@@ -34,6 +35,21 @@ export default function ProjectCard({ refreshKey, onRefresh }) {
     api.getProjectLogs(id).then(setLogs);
     api.listPeople().then(setAvailablePeople);
   }, [id, refreshKey]);
+
+  // Merge WebSocket item updates
+  useEffect(() => {
+    if (!itemUpdate) return;
+    setItems(prev => {
+      const idx = prev.findIndex(i => i.id === itemUpdate.id);
+      if (idx >= 0) { const u = [...prev]; u[idx] = itemUpdate; return u; }
+      return prev;
+    });
+    setCompletedItems(prev => {
+      const idx = prev.findIndex(i => i.id === itemUpdate.id);
+      if (idx >= 0) { const u = [...prev]; u[idx] = itemUpdate; return u; }
+      return prev;
+    });
+  }, [itemUpdate]);
 
   const saveDetails = async () => {
     await api.updateProject(id, detailsForm);
@@ -227,10 +243,7 @@ export default function ProjectCard({ refreshKey, onRefresh }) {
       </div>
 
       {tab === 'items' && (
-        <div className="flex flex-col gap-2">
-          {items.length === 0 && <div className="text-center text-zinc-700 py-8 text-sm">No open items</div>}
-          {items.map(item => <ItemCard key={item.id} item={item} onUpdate={onRefresh} compact />)}
-        </div>
+        <DraggableItemList items={items} setItems={setItems} onUpdate={onRefresh} compact />
       )}
 
       {tab === 'completed' && (

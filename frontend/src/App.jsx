@@ -27,6 +27,7 @@ export default function App() {
   const [showSearch, setShowSearch] = useState(false);
   const [showDigestBanner, setShowDigestBanner] = useState(false);
   const [toast, setToast] = useState(null);
+  const [itemUpdate, setItemUpdate] = useState(null);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -53,7 +54,9 @@ export default function App() {
   const refresh = useCallback(() => setRefreshKey(k => k + 1), []);
 
   const handleWsMessage = useCallback((data) => {
-    if (data.type === 'item_updated') refresh();
+    if (data.type === 'item_updated' && data.item) {
+      setItemUpdate(data.item);
+    }
     if (data.type === 'resolution_suggestion' && data.auto_resolve) {
       setToast({ message: 'An item was auto-resolved', type: 'info' });
       refresh();
@@ -109,12 +112,12 @@ export default function App() {
         <CaptureBox onCapture={refresh} onSearch={() => setShowSearch(true)} />
         <main className="flex-1 overflow-y-auto">
           <Routes>
-            <Route path="/" element={<Feed refreshKey={refreshKey} onRefresh={refresh} showDigestBanner={showDigestBanner} onDismissDigest={() => { setShowDigestBanner(false); localStorage.setItem('ledger_digest_dismissed', new Date().toISOString().split('T')[0]); }} />} />
+            <Route path="/" element={<Feed refreshKey={refreshKey} onRefresh={refresh} itemUpdate={itemUpdate} showDigestBanner={showDigestBanner} onDismissDigest={() => { setShowDigestBanner(false); localStorage.setItem('ledger_digest_dismissed', new Date().toISOString().split('T')[0]); }} />} />
             <Route path="/people" element={<PeopleDirectory refreshKey={refreshKey} />} />
-            <Route path="/people/:id" element={<PersonProfile refreshKey={refreshKey} onRefresh={refresh} />} />
+            <Route path="/people/:id" element={<PersonProfile refreshKey={refreshKey} onRefresh={refresh} itemUpdate={itemUpdate} />} />
             <Route path="/projects" element={<ProjectDirectory refreshKey={refreshKey} />} />
-            <Route path="/projects/:id" element={<ProjectCard refreshKey={refreshKey} onRefresh={refresh} />} />
-            <Route path="/meeting/:type/:id" element={<MeetingMode refreshKey={refreshKey} onRefresh={refresh} />} />
+            <Route path="/projects/:id" element={<ProjectCard refreshKey={refreshKey} onRefresh={refresh} itemUpdate={itemUpdate} />} />
+            <Route path="/meeting/:type/:id" element={<MeetingMode refreshKey={refreshKey} onRefresh={refresh} itemUpdate={itemUpdate} />} />
             <Route path="/digest" element={<DailyDigest />} />
             <Route path="/timeline" element={<Timeline />} />
             <Route path="/org-chart" element={<OrgChartPage />} />

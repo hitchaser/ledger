@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { api } from '../api/client';
-import { Save, Sun, Moon } from 'lucide-react';
+import { Save, Sun, Moon, User } from 'lucide-react';
 
 const MODEL_PRESETS = [
   { group: 'LiteLLM (Cloud)', provider: 'litellm', models: [
@@ -15,15 +15,14 @@ const MODEL_PRESETS = [
   ]},
 ];
 
-function ModelSelector({ modelValue, providerValue, onModelChange, onProviderChange, label, description }) {
+function ModelSelector({ modelValue, providerValue, onChange, label, description }) {
   const [custom, setCustom] = useState(false);
 
   const isPreset = MODEL_PRESETS.some(g => g.models.some(m => m.value === modelValue));
   const showCustom = custom || !isPreset;
 
   const handlePresetSelect = (model, provider) => {
-    onModelChange(model);
-    onProviderChange(provider);
+    onChange({ model, provider });
     setCustom(false);
   };
 
@@ -71,7 +70,7 @@ function ModelSelector({ modelValue, providerValue, onModelChange, onProviderCha
         <div>
           <div className="flex gap-2 mb-1.5">
             {['litellm', 'ollama'].map(p => (
-              <button key={p} onClick={() => onProviderChange(p)}
+              <button key={p} onClick={() => onChange({ provider: p })}
                 className={`px-2 py-1 rounded text-xs transition-all ${
                   providerValue === p
                     ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
@@ -84,7 +83,7 @@ function ModelSelector({ modelValue, providerValue, onModelChange, onProviderCha
           <div className="flex gap-2">
             <input
               value={modelValue}
-              onChange={e => onModelChange(e.target.value)}
+              onChange={e => onChange({ model: e.target.value })}
               placeholder="model-name:tag"
               className="flex-1 glass-input rounded px-3 py-2 text-sm text-zinc-200 outline-none"
             />
@@ -103,9 +102,11 @@ export default function SettingsPage({ theme, onToggleTheme }) {
   const [settings, setSettings] = useState(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [people, setPeople] = useState([]);
 
   useEffect(() => {
     api.getSettings().then(setSettings).catch(console.error);
+    api.listPeople().then(setPeople).catch(console.error);
   }, []);
 
   const save = async () => {
@@ -156,6 +157,23 @@ export default function SettingsPage({ theme, onToggleTheme }) {
         </div>
       </div>
 
+      {/* Identity */}
+      <div className="glass rounded-lg p-4 mb-4">
+        <h3 className="text-sm font-medium text-zinc-300 mb-3 flex items-center gap-1.5"><User size={14} /> Identity</h3>
+        <div>
+          <label className="text-xs text-zinc-500 mb-1 block">I am...</label>
+          <select
+            value={settings.owner_person_id || ''}
+            onChange={e => setSettings(s => ({ ...s, owner_person_id: e.target.value }))}
+            className="w-full glass-input rounded px-3 py-2 text-sm text-zinc-300 outline-none"
+          >
+            <option value="">Not set</option>
+            {people.map(p => <option key={p.id} value={p.id}>{p.display_name} ({p.name})</option>)}
+          </select>
+          <p className="text-xs text-zinc-600 mt-1">Select yourself to exclude from stale contacts and other self-references</p>
+        </div>
+      </div>
+
       {/* AI Configuration */}
       <div className="glass rounded-lg p-4 mb-4">
         <h3 className="text-sm font-medium text-zinc-300 mb-3">AI Configuration</h3>
@@ -177,18 +195,16 @@ export default function SettingsPage({ theme, onToggleTheme }) {
           <ModelSelector
             modelValue={settings.classification_model}
             providerValue={settings.classification_provider || 'litellm'}
-            onModelChange={v => setSettings({ ...settings, classification_model: v })}
-            onProviderChange={v => setSettings({ ...settings, classification_provider: v })}
+            onChange={({ model, provider }) => setSettings(s => ({ ...s, ...(model !== undefined && { classification_model: model }), ...(provider !== undefined && { classification_provider: provider }) }))}
             label="Classification Model"
-            description="Classifies captures — type, urgency, people/project linking, resolution matching"
+            description="Classifies captures — type, people/project linking, due dates, resolution matching"
           />
 
           {/* Profile Model */}
           <ModelSelector
             modelValue={settings.profile_model}
             providerValue={settings.profile_provider || 'ollama'}
-            onModelChange={v => setSettings({ ...settings, profile_model: v })}
-            onProviderChange={v => setSettings({ ...settings, profile_provider: v })}
+            onChange={({ model, provider }) => setSettings(s => ({ ...s, ...(model !== undefined && { profile_model: model }), ...(provider !== undefined && { profile_provider: provider }) }))}
             label="Profile Parsing Model"
             description="Extracts structured profile fields from captures (e.g. 'daughter named Susan' → Children)"
           />

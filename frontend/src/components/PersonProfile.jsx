@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import ItemCard from './ItemCard';
+import DraggableItemList from './DraggableItemList';
 import AvatarUpload from './AvatarUpload';
 import { ArrowLeft, Play, Edit3, Save, Plus, Settings, X, Archive, ArchiveRestore, Trash2, FolderKanban } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -27,7 +28,7 @@ function displayValue(val, isList) {
   return val || 'Unknown';
 }
 
-export default function PersonProfile({ refreshKey, onRefresh }) {
+export default function PersonProfile({ refreshKey, onRefresh, itemUpdate }) {
   const { id } = useParams();
   const navigate = useNavigate();
   const [person, setPerson] = useState(null);
@@ -57,6 +58,21 @@ export default function PersonProfile({ refreshKey, onRefresh }) {
     api.listPeople().then(setAllPeople);
     api.listProjects().then(setAvailableProjects);
   }, [id, refreshKey]);
+
+  // Merge WebSocket item updates into local state
+  useEffect(() => {
+    if (!itemUpdate) return;
+    setItems(prev => {
+      const idx = prev.findIndex(i => i.id === itemUpdate.id);
+      if (idx >= 0) { const u = [...prev]; u[idx] = itemUpdate; return u; }
+      return prev;
+    });
+    setCompletedItems(prev => {
+      const idx = prev.findIndex(i => i.id === itemUpdate.id);
+      if (idx >= 0) { const u = [...prev]; u[idx] = itemUpdate; return u; }
+      return prev;
+    });
+  }, [itemUpdate]);
 
   const detailsDisplayNameDupe = (() => {
     const dn = detailsForm.display_name.trim().toLowerCase();
@@ -140,8 +156,9 @@ export default function PersonProfile({ refreshKey, onRefresh }) {
                 <Settings size={16} />
               </button>
             </div>
+            {person.name !== person.display_name && <p className="text-xs text-zinc-500">{person.name}</p>}
             <p className="text-sm text-zinc-600">
-              {person.role || 'No role set'} &middot; {person.reporting_level}
+              {person.role || 'No role set'} &middot; {({'executive':'Executive','manager':'Manager','ic':'IC'})[person.reporting_level] || person.reporting_level}
               {person.email ? ` · ${person.email}` : ''}
               {person.manager && <> &middot; Reports to <Link to={`/people/${person.manager.id}`} className="text-blue-400 hover:text-blue-300">{person.manager.display_name}</Link></>}
             </p>
@@ -191,11 +208,9 @@ export default function PersonProfile({ refreshKey, onRefresh }) {
               <label className="text-xs text-zinc-600 mb-0.5 block">Reporting Level</label>
               <select value={detailsForm.reporting_level} onChange={e => setDetailsForm({...detailsForm, reporting_level: e.target.value})}
                 className="w-full glass-input rounded px-3 py-1.5 text-sm text-zinc-300 outline-none">
-                <option value="director">Director</option>
+                <option value="executive">Executive</option>
                 <option value="manager">Manager</option>
-                <option value="employee">Employee</option>
-                <option value="peer">Peer</option>
-                <option value="other">Other</option>
+                <option value="ic">Individual Contributor</option>
               </select>
             </div>
             <div>
@@ -370,10 +385,7 @@ export default function PersonProfile({ refreshKey, onRefresh }) {
       </div>
 
       {tab === 'items' && (
-        <div className="flex flex-col gap-2">
-          {items.length === 0 && <div className="text-center text-zinc-700 py-8 text-sm">No open items</div>}
-          {items.map(item => <ItemCard key={item.id} item={item} onUpdate={onRefresh} compact />)}
-        </div>
+        <DraggableItemList items={items} setItems={setItems} onUpdate={onRefresh} compact />
       )}
 
       {tab === 'completed' && (

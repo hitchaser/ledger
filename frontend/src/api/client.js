@@ -26,6 +26,7 @@ export const api = {
   },
   updateCapture: (id, data) => request(`/captures/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   deleteCapture: (id) => request(`/captures/${id}`, { method: 'DELETE' }),
+  reorderCaptures: (item_ids) => request('/captures/reorder', { method: 'POST', body: JSON.stringify({ item_ids }) }),
   linkPerson: (itemId, personId) => request(`/captures/${itemId}/link-person/${personId}`, { method: 'POST' }),
   unlinkPerson: (itemId, personId) => request(`/captures/${itemId}/link-person/${personId}`, { method: 'DELETE' }),
   linkProject: (itemId, projectId) => request(`/captures/${itemId}/link-project/${projectId}`, { method: 'POST' }),

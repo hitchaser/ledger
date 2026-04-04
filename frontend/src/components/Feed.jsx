@@ -1,16 +1,14 @@
 import { useState, useEffect } from 'react';
 import { api } from '../api/client';
-import ItemCard from './ItemCard';
+import DraggableItemList from './DraggableItemList';
 import { CalendarDays } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 const TYPE_OPTIONS = ['all', 'todo', 'followup', 'reminder', 'discussion', 'goal', 'note'];
-const URGENCY_OPTIONS = ['all', 'today', 'this_week', 'this_month', 'someday'];
 
-export default function Feed({ refreshKey, onRefresh, showDigestBanner, onDismissDigest }) {
+export default function Feed({ refreshKey, onRefresh, itemUpdate, showDigestBanner, onDismissDigest }) {
   const [items, setItems] = useState([]);
   const [typeFilter, setTypeFilter] = useState('all');
-  const [urgencyFilter, setUrgencyFilter] = useState('all');
   const [search, setSearch] = useState('');
   const [showArchive, setShowArchive] = useState(false);
   const navigate = useNavigate();
@@ -18,12 +16,25 @@ export default function Feed({ refreshKey, onRefresh, showDigestBanner, onDismis
   useEffect(() => {
     const params = {};
     if (typeFilter !== 'all') params.type = typeFilter;
-    if (urgencyFilter !== 'all') params.urgency = urgencyFilter;
     if (search) params.search = search;
     if (showArchive) params.include_done = 'true';
     else params.status = 'open';
     api.listCaptures(params).then(setItems).catch(console.error);
-  }, [refreshKey, typeFilter, urgencyFilter, search, showArchive]);
+  }, [refreshKey, typeFilter, search, showArchive]);
+
+  // Merge WebSocket item updates into local state
+  useEffect(() => {
+    if (!itemUpdate) return;
+    setItems(prev => {
+      const idx = prev.findIndex(i => i.id === itemUpdate.id);
+      if (idx >= 0) {
+        const updated = [...prev];
+        updated[idx] = itemUpdate;
+        return updated;
+      }
+      return prev;
+    });
+  }, [itemUpdate]);
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-4">
@@ -41,10 +52,6 @@ export default function Feed({ refreshKey, onRefresh, showDigestBanner, onDismis
       )}
 
       <div className="flex flex-wrap items-center gap-2 mb-4">
-        <select value={urgencyFilter} onChange={e => setUrgencyFilter(e.target.value)}
-          className="glass-input rounded px-2 py-1 text-xs text-zinc-400 outline-none">
-          {URGENCY_OPTIONS.map(o => <option key={o} value={o}>{o === 'all' ? 'All Urgency' : o.replace('_', ' ')}</option>)}
-        </select>
         <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)}
           className="glass-input rounded px-2 py-1 text-xs text-zinc-400 outline-none">
           {TYPE_OPTIONS.map(o => <option key={o} value={o}>{o === 'all' ? 'All Types' : o}</option>)}
@@ -57,16 +64,7 @@ export default function Feed({ refreshKey, onRefresh, showDigestBanner, onDismis
         </label>
       </div>
 
-      <div className="flex flex-col gap-2">
-        {items.length === 0 && (
-          <div className="text-center text-zinc-700 py-12 text-sm">
-            {search ? 'No matches found' : 'No items yet. Capture something above!'}
-          </div>
-        )}
-        {items.map(item => (
-          <ItemCard key={item.id} item={item} onUpdate={onRefresh} />
-        ))}
-      </div>
+      <DraggableItemList items={items} setItems={setItems} onUpdate={onRefresh} />
     </div>
   );
 }

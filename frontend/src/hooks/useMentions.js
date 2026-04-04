@@ -1,21 +1,13 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { api } from '../api/client';
 
-const HASHTAG_OPTIONS = [
-  { group: 'urgency', items: [
-    { name: 'today', detail: 'Due today' },
-    { name: 'week', detail: 'Due this week' },
-    { name: 'month', detail: 'Due this month' },
-    { name: 'someday', detail: 'No time pressure' },
-  ]},
-  { group: 'type', items: [
-    { name: 'todo', detail: 'Task for you' },
-    { name: 'followup', detail: 'Check on with someone' },
-    { name: 'reminder', detail: 'Time-sensitive' },
-    { name: 'discussion', detail: 'Share with someone' },
-    { name: 'goal', detail: 'Long-horizon objective' },
-    { name: 'note', detail: 'General info' },
-  ]},
+const HASHTAG_TYPE_OPTIONS = [
+  { name: 'todo', detail: 'Task for you' },
+  { name: 'followup', detail: 'Check on with someone' },
+  { name: 'reminder', detail: 'Time-sensitive' },
+  { name: 'discussion', detail: 'Share with someone' },
+  { name: 'goal', detail: 'Long-horizon objective' },
+  { name: 'note', detail: 'General info' },
 ];
 
 export function useMentions() {
@@ -59,26 +51,40 @@ export function useMentions() {
 
   const buildHashResults = useCallback((query) => {
     const results = [];
-    // Hashtag options (urgency + type)
-    for (const group of HASHTAG_OPTIONS) {
-      for (const item of group.items) {
+    const isEmptyQuery = !query;
+
+    if (isEmptyQuery) {
+      // Show people and projects first when # typed with no query
+      for (const p of peopleRef.current) {
+        results.push({ type: 'person', id: p.id, name: p.display_name, fullName: p.name, detail: p.role || '', prefix: '#' });
+      }
+      for (const p of projectsRef.current) {
+        results.push({ type: 'project', id: p.id, name: p.name, detail: p.short_code || '', prefix: '#' });
+      }
+      // Then type shortcuts
+      for (const item of HASHTAG_TYPE_OPTIONS) {
+        results.push({ type: 'type', id: item.name, name: item.name, detail: item.detail, prefix: '#' });
+      }
+    } else {
+      // When query is non-empty, type shortcuts first (so #todo matches quickly)
+      for (const item of HASHTAG_TYPE_OPTIONS) {
         if (item.name.includes(query)) {
-          results.push({ type: group.group, id: item.name, name: item.name, detail: item.detail, prefix: '#' });
+          results.push({ type: 'type', id: item.name, name: item.name, detail: item.detail, prefix: '#' });
+        }
+      }
+      // Then people/projects
+      for (const p of peopleRef.current) {
+        if (p.display_name.toLowerCase().includes(query) || p.name.toLowerCase().includes(query)) {
+          results.push({ type: 'person', id: p.id, name: p.display_name, fullName: p.name, detail: p.role || '', prefix: '#' });
+        }
+      }
+      for (const p of projectsRef.current) {
+        if (p.name.toLowerCase().includes(query) || (p.short_code || '').toLowerCase().includes(query)) {
+          results.push({ type: 'project', id: p.id, name: p.name, detail: p.short_code || '', prefix: '#' });
         }
       }
     }
-    // Also match people/projects via #
-    for (const p of peopleRef.current) {
-      if (p.display_name.toLowerCase().includes(query) || p.name.toLowerCase().includes(query)) {
-        results.push({ type: 'person', id: p.id, name: p.display_name, fullName: p.name, detail: p.role || '', prefix: '#' });
-      }
-    }
-    for (const p of projectsRef.current) {
-      if (p.name.toLowerCase().includes(query) || (p.short_code || '').toLowerCase().includes(query)) {
-        results.push({ type: 'project', id: p.id, name: p.name, detail: p.short_code || '', prefix: '#' });
-      }
-    }
-    return results.slice(0, 10);
+    return results.slice(0, 15);
   }, []);
 
   const updateMention = useCallback(async (text, cursorPos) => {

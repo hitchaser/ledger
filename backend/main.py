@@ -30,6 +30,28 @@ for col_name, col_def in [("due_date", "TIMESTAMP WITH TIME ZONE"), ("is_pinned"
             conn.execute(sa_text(f"ALTER TABLE capture_items ADD COLUMN {col_name} {col_def}"))
         logger.info(f"Migrated capture_items: added {col_name}")
 
+if "sort_order" not in _capture_cols:
+    with engine.begin() as conn:
+        conn.execute(sa_text("ALTER TABLE capture_items ADD COLUMN sort_order INTEGER DEFAULT 0"))
+    logger.info("Migrated capture_items: added sort_order")
+
+# Migration: reporting level enum — add new values and migrate data
+try:
+    with engine.begin() as conn:
+        conn.execute(sa_text("ALTER TYPE reportinglevel ADD VALUE IF NOT EXISTS 'executive'"))
+        conn.execute(sa_text("ALTER TYPE reportinglevel ADD VALUE IF NOT EXISTS 'ic'"))
+    logger.info("Added executive/ic to reportinglevel enum")
+except Exception:
+    pass  # Values already exist
+
+try:
+    with engine.begin() as conn:
+        conn.execute(sa_text("UPDATE people SET reporting_level = 'executive' WHERE reporting_level = 'director'"))
+        conn.execute(sa_text("UPDATE people SET reporting_level = 'ic' WHERE reporting_level IN ('employee', 'peer', 'other')"))
+    logger.info("Migrated reporting_level data: director→executive, employee/peer/other→ic")
+except Exception as e:
+    logger.warning(f"Reporting level migration skipped: {e}")
+
 _people_cols = [c["name"] for c in _insp.get_columns("people")]
 if "avatar" not in _people_cols:
     with engine.begin() as conn:
@@ -123,8 +145,10 @@ async def ai_worker():
                 if result:
                     if result.get("item_type"):
                         item.item_type = result["item_type"]
-                    if result.get("urgency"):
-                        item.urgency = result["urgency"]
+                    # Urgency is deprecated — convert to due_date if needed
+                    if result.get("urgency") == "today" and not result.get("due_date") and not item.due_date:
+                        from datetime import date as date_type
+                        result["due_date"] = date_type.today().isoformat()
                     item.ai_confidence = result.get("confidence", 0.0)
                     item.ai_processed_at = datetime.now(timezone.utc)
 

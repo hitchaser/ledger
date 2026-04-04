@@ -40,8 +40,11 @@ class ItemStatus(str, enum.Enum):
 
 
 class ReportingLevel(str, enum.Enum):
-    director = "director"
+    executive = "executive"
     manager = "manager"
+    ic = "ic"
+    # Legacy values kept for DB compatibility during migration
+    director = "director"
     employee = "employee"
     peer = "peer"
     other = "other"
@@ -111,10 +114,11 @@ class CaptureItem(Base):
     manual_type = Column(Enum(ItemType), nullable=True)
     manual_urgency = Column(Enum(Urgency), nullable=True)
 
-    # Due date + pin + recurring
+    # Due date + pin + recurring + ordering
     due_date = Column(DateTime(timezone=True), nullable=True)
     is_pinned = Column(Boolean, default=False)
     recurrence = Column(String, nullable=True)  # daily, weekly, biweekly, monthly
+    sort_order = Column(Integer, default=0)
 
     # Relations
     meeting_session_id = Column(UUID(as_uuid=True), ForeignKey("meeting_sessions.id"), nullable=True)

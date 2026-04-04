@@ -18,27 +18,23 @@ router = APIRouter(prefix="/api/captures", tags=["captures"])
 
 def parse_shortcuts(text: str, db: Session):
     """Parse and strip #hashtag and @mention shortcuts from capture text."""
-    urgency_map = {"today": Urgency.today, "week": Urgency.this_week, "month": Urgency.this_month, "someday": Urgency.someday}
     type_map = {"todo": ItemType.todo, "followup": ItemType.followup, "reminder": ItemType.reminder,
                 "goal": ItemType.goal, "note": ItemType.note, "discussion": ItemType.discussion}
 
-    manual_urgency = None
     manual_type = None
     linked_people = []
     linked_projects = []
     seen_people_ids = set()
     seen_project_ids = set()
-    strip_fully = set()   # Tags to remove entirely (#today, #todo, etc.)
+    strip_fully = set()   # Tags to remove entirely (#todo, etc.)
     strip_symbol = set()  # Tags to keep name but remove #/@ (@John → John)
+    matched_mentions = {}  # @mention → person/project (for leading detection)
 
-    # Parse #hashtags (urgency, type, or person/project fallback)
+    # Parse #hashtags (type or person/project fallback)
     tags = re.findall(r"#(\w+)", text)
     for tag in tags:
         tl = tag.lower()
-        if tl in urgency_map:
-            manual_urgency = urgency_map[tl]
-            strip_fully.add(f"#{tag}")
-        elif tl in type_map:
+        if tl in type_map:
             manual_type = type_map[tl]
             strip_fully.add(f"#{tag}")
         else:
@@ -71,7 +67,7 @@ def parse_shortcuts(text: str, db: Session):
         if person and person.id not in seen_people_ids:
             linked_people.append(person)
             seen_people_ids.add(person.id)
-            strip_symbol.add(f"@{mention}")
+            matched_mentions[f"@{mention}"] = True
             continue
         project = db.query(Project).filter(
             Project.is_archived == False,
@@ -80,20 +76,45 @@ def parse_shortcuts(text: str, db: Session):
         if project and project.id not in seen_project_ids:
             linked_projects.append(project)
             seen_project_ids.add(project.id)
-            strip_symbol.add(f"@{mention}")
+            matched_mentions[f"@{mention}"] = True
 
-    # Strip metadata tags entirely (#today, #todo)
+    # Detect leading @mentions: at start of text before any non-mention words
+    # "@John @Jim Need to check in" → leading=[@John, @Jim], rest="Need to check in"
+    leading_mentions = set()
+    stripped = text.lstrip()
+    while stripped.startswith("@"):
+        m = re.match(r"@(\w+)\s*", stripped)
+        if not m:
+            break
+        tag = f"@{m.group(1)}"
+        if tag in matched_mentions:
+            leading_mentions.add(tag)
+            stripped = stripped[m.end():]
+        else:
+            break
+
+    # Strip metadata tags entirely (#todo, etc.)
     clean_text = text
     for tag in strip_fully:
         clean_text = re.sub(r"\s*" + re.escape(tag) + r"\b", "", clean_text)
-    # For person/project tags, just remove the # or @ symbol, keep the name
+
+    # For #person/#project tags, remove the # symbol, keep the name
     for tag in strip_symbol:
-        name = tag[1:]  # Remove the # or @ prefix
+        name = tag[1:]
         clean_text = clean_text.replace(tag, name)
-    # Also strip @ from any unmatched @mentions so text reads naturally
+
+    # For @mentions: leading ones are stripped entirely, non-leading strip @ keep name
+    for tag in matched_mentions:
+        if tag in leading_mentions:
+            clean_text = re.sub(r"\s*" + re.escape(tag) + r"\b", "", clean_text)
+        else:
+            name = tag[1:]
+            clean_text = clean_text.replace(tag, name)
+
+    # Strip @ from any unmatched @mentions
     clean_text = clean_text.replace("@", "")
     clean_text = clean_text.strip()
-    return clean_text, manual_type, manual_urgency, linked_people, linked_projects
+    return clean_text, manual_type, None, linked_people, linked_projects
 
 
 def item_to_response(item: CaptureItem) -> dict:
@@ -113,7 +134,7 @@ def item_to_response(item: CaptureItem) -> dict:
         "manual_urgency": item.manual_urgency.value if item.manual_urgency else None,
         "effective_type": (item.manual_type or item.item_type).value if (item.manual_type or item.item_type) else None,
         "effective_urgency": (item.manual_urgency or item.urgency).value if (item.manual_urgency or item.urgency) else None,
-        "linked_people": [{"id": p.id, "display_name": p.display_name, "avatar": p.avatar} for p in item.linked_people],
+        "linked_people": [{"id": p.id, "display_name": p.display_name, "name": p.name, "avatar": p.avatar} for p in item.linked_people],
         "linked_projects": [{"id": p.id, "name": p.name, "short_code": p.short_code} for p in item.linked_projects],
         "meeting_session_id": item.meeting_session_id,
         "due_date": item.due_date.isoformat() if item.due_date else None,
@@ -121,7 +142,20 @@ def item_to_response(item: CaptureItem) -> dict:
         "recurrence": item.recurrence,
         "notes": [{"id": n.id, "content": n.content, "created_at": n.created_at.isoformat()} for n in (item.notes or [])],
         "predecessors": [{"id": p.id, "raw_text": p.raw_text[:80]} for p in (item.predecessors or [])],
+        "sort_order": item.sort_order or 0,
     }
+
+
+@router.post("/reorder")
+def reorder_items(body: dict, db: Session = Depends(get_db)):
+    """Set sort_order for a list of items. Array order = sort order."""
+    item_ids = body.get("item_ids", [])
+    for idx, item_id in enumerate(item_ids):
+        db.query(CaptureItem).filter(CaptureItem.id == item_id).update(
+            {"sort_order": idx}, synchronize_session=False
+        )
+    db.commit()
+    return {"ok": True}
 
 
 @router.post("", response_model=CaptureResponse)
@@ -183,7 +217,7 @@ def list_captures(
     if search:
         q = q.filter(CaptureItem.raw_text.ilike(f"%{search}%"))
 
-    items = q.order_by(CaptureItem.is_pinned.desc().nullslast(), CaptureItem.created_at.desc()).offset(offset).limit(limit).all()
+    items = q.order_by(CaptureItem.is_pinned.desc().nullslast(), CaptureItem.sort_order.asc().nullslast(), CaptureItem.created_at.desc()).offset(offset).limit(limit).all()
     return [item_to_response(i) for i in items]
 
 

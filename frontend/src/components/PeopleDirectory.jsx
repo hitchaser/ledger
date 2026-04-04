@@ -5,12 +5,12 @@ import { UserPlus, Search, Archive } from 'lucide-react';
 import Avatar from './Avatar';
 
 const LEVEL_COLORS = {
-  director: 'bg-violet-500/15 text-violet-400 border border-violet-500/20',
+  executive: 'bg-violet-500/15 text-violet-400 border border-violet-500/20',
   manager: 'bg-blue-500/15 text-blue-400 border border-blue-500/20',
-  employee: 'bg-sky-500/15 text-sky-400 border border-sky-500/20',
-  peer: 'bg-slate-500/15 text-slate-400 border border-slate-500/20',
-  other: 'bg-zinc-500/10 text-zinc-500 border border-zinc-500/15',
+  ic: 'bg-sky-500/15 text-sky-400 border border-sky-500/20',
 };
+
+const LEVEL_LABELS = { executive: 'Executive', manager: 'Manager', ic: 'IC' };
 
 export default function PeopleDirectory({ refreshKey }) {
   const [people, setPeople] = useState([]);
@@ -19,7 +19,7 @@ export default function PeopleDirectory({ refreshKey }) {
   const [showArchived, setShowArchived] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({
-    name: '', display_name: '', role: '', reporting_level: 'employee',
+    name: '', display_name: '', role: '', reporting_level: 'ic',
     profile: { spouse: '', anniversary: '', children: '', pets: '', birthday: '', hobbies: '', location: '', general: '' },
     selectedProjectIds: [],
   });
@@ -78,11 +78,9 @@ export default function PeopleDirectory({ refreshKey }) {
             className="glass-input rounded px-3 py-1.5 text-sm text-zinc-200 outline-none" />
           <select value={form.reporting_level} onChange={e => setForm({...form, reporting_level: e.target.value})}
             className="glass-input rounded px-3 py-1.5 text-sm text-zinc-300">
-            <option value="director">Director</option>
+            <option value="executive">Executive</option>
             <option value="manager">Manager</option>
-            <option value="employee">Employee</option>
-            <option value="peer">Peer</option>
-            <option value="other">Other</option>
+            <option value="ic">Individual Contributor</option>
           </select>
           <div className="col-span-2 border-t border-white/[0.04] pt-2 mt-1">
             <span className="text-xs text-zinc-500 font-medium uppercase tracking-wide">Profile (optional)</span>
@@ -157,13 +155,13 @@ export default function PeopleDirectory({ refreshKey }) {
             <div className="flex items-center gap-3">
               <Avatar src={p.avatar} name={p.display_name} size="md" />
               <div>
-                <span className={`text-sm font-medium ${p.is_archived ? 'text-zinc-500' : 'text-zinc-200'}`}>{p.display_name}</span>
+                <span className={`text-sm font-medium ${p.is_archived ? 'text-zinc-500' : 'text-zinc-200'}`} title={p.name}>{p.display_name}</span>
                 {p.is_archived && <span className="text-xs text-zinc-600 ml-1.5 badge bg-zinc-500/10 border border-zinc-500/15">archived</span>}
                 {p.role && <span className="text-xs text-zinc-600 ml-2">{p.role}</span>}
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <span className={`badge ${LEVEL_COLORS[p.reporting_level] || LEVEL_COLORS.other}`}>{p.reporting_level}</span>
+              <span className={`badge ${LEVEL_COLORS[p.reporting_level] || 'bg-zinc-500/10 text-zinc-500 border border-zinc-500/15'}`}>{LEVEL_LABELS[p.reporting_level] || p.reporting_level}</span>
               {p.open_item_count > 0 && (
                 <span className="text-xs text-zinc-600">{p.open_item_count} open</span>
               )}

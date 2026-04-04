@@ -14,16 +14,8 @@ const TYPE_COLORS = {
   profile_update: 'bg-cyan-500/15 text-cyan-400 border border-cyan-500/20',
 };
 
-const URGENCY_COLORS = {
-  today: 'bg-rose-500/15 text-rose-300 border border-rose-500/20',
-  this_week: 'bg-sky-500/15 text-sky-300 border border-sky-500/20',
-  this_month: 'bg-blue-500/10 text-blue-300 border border-blue-500/15',
-  someday: 'bg-zinc-500/10 text-zinc-500 border border-zinc-500/15',
-};
-
 const RECURRENCE_OPTIONS = ['', 'daily', 'weekly', 'biweekly', 'monthly'];
 const TYPE_OPTIONS = ['', 'todo', 'followup', 'reminder', 'discussion', 'goal', 'note'];
-const URGENCY_OPTIONS = ['', 'today', 'this_week', 'this_month', 'someday'];
 
 function timeAgo(dateStr) {
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -53,7 +45,6 @@ export default function ItemCard({ item, onUpdate, compact = false, readonly = f
   const [editing, setEditing] = useState(false);
   const [editText, setEditText] = useState('');
   const [editType, setEditType] = useState('');
-  const [editUrgency, setEditUrgency] = useState('');
   const [editDueDate, setEditDueDate] = useState('');
   const [editRecurrence, setEditRecurrence] = useState('');
   const [showNotes, setShowNotes] = useState(false);
@@ -62,7 +53,6 @@ export default function ItemCard({ item, onUpdate, compact = false, readonly = f
   const [openItems, setOpenItems] = useState([]);
   const [predSearch, setPredSearch] = useState('');
   const type = item.effective_type;
-  const urgency = item.effective_urgency;
   const isProcessing = !item.ai_processed_at && !item.manual_type;
   const isDone = item.status === 'done';
   const displayText = (!expanded && !editing && item.raw_text.length > 120) ? item.raw_text.slice(0, 120) + '...' : item.raw_text;
@@ -92,7 +82,6 @@ export default function ItemCard({ item, onUpdate, compact = false, readonly = f
   const startEdit = async () => {
     setEditText(item.raw_text);
     setEditType(item.manual_type || item.effective_type || '');
-    setEditUrgency(item.manual_urgency || item.effective_urgency || '');
     setEditDueDate(item.due_date ? new Date(item.due_date).toISOString().split('T')[0] : '');
     setEditRecurrence(item.recurrence || '');
     setEditing(true);
@@ -104,7 +93,6 @@ export default function ItemCard({ item, onUpdate, compact = false, readonly = f
   const saveEdit = async () => {
     const updates = {
       manual_type: editType || '',
-      manual_urgency: editUrgency || '',
       due_date: editDueDate || '',
       recurrence: editRecurrence || '',
     };
@@ -160,11 +148,6 @@ export default function ItemCard({ item, onUpdate, compact = false, readonly = f
                 <option value="">Type...</option>
                 {TYPE_OPTIONS.filter(Boolean).map(t => <option key={t} value={t}>{t.replace('_', ' ')}</option>)}
               </select>
-              <select value={editUrgency} onChange={e => setEditUrgency(e.target.value)}
-                className="glass-input rounded px-2 py-1 text-xs text-zinc-300 outline-none">
-                <option value="">Urgency...</option>
-                {URGENCY_OPTIONS.filter(Boolean).map(u => <option key={u} value={u}>{u.replace('_', ' ')}</option>)}
-              </select>
               <input type="date" value={editDueDate} onChange={e => setEditDueDate(e.target.value)}
                 className="glass-input rounded px-2 py-1 text-xs text-zinc-300 outline-none" />
               <select value={editRecurrence} onChange={e => setEditRecurrence(e.target.value)}
@@ -218,11 +201,10 @@ export default function ItemCard({ item, onUpdate, compact = false, readonly = f
             <div className="flex flex-wrap items-center gap-1.5 mt-2">
               {isProcessing && <span className="badge bg-white/5 text-zinc-500 border border-white/10"><Loader2 size={10} className="inline animate-spin mr-1" />classifying</span>}
               {type && <span className={`badge ${TYPE_COLORS[type] || TYPE_COLORS.note}`}>{type.replace('_', ' ')}</span>}
-              {urgency && <span className={`badge ${URGENCY_COLORS[urgency] || URGENCY_COLORS.someday}`}>{urgency.replace('_', ' ')}</span>}
               {dueLabel && <span className={`badge ${isOverdue ? 'bg-rose-500/20 text-rose-400 border border-rose-500/25' : 'bg-zinc-500/10 text-zinc-400 border border-zinc-500/15'}`}><Calendar size={10} className="inline mr-0.5" />{dueLabel}</span>}
               {item.recurrence && <span className="badge bg-violet-500/10 text-violet-400 border border-violet-500/15"><Repeat size={10} className="inline mr-0.5" />{item.recurrence}</span>}
               {item.linked_people?.map(p => (
-                <Link key={p.id} to={`/people/${p.id}`} className="badge bg-indigo-500/10 text-indigo-400 border border-indigo-500/15 hover:bg-indigo-500/20 cursor-pointer transition-colors flex items-center gap-1">
+                <Link key={p.id} to={`/people/${p.id}`} title={p.name || p.display_name} className="badge bg-indigo-500/10 text-indigo-400 border border-indigo-500/15 hover:bg-indigo-500/20 cursor-pointer transition-colors flex items-center gap-1">
                   <Avatar src={p.avatar} name={p.display_name} size="xs" />
                   {p.display_name}
                 </Link>

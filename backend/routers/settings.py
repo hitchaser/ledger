@@ -16,6 +16,7 @@ DEFAULTS = {
     "litellm_api_key": "sk-olympus-litellm-master",
     "confidence_auto_resolve": "0.85",
     "confidence_suggest": "0.60",
+    "owner_person_id": "",
 }
 
 

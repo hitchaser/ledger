@@ -133,20 +133,18 @@ Categories for item_type:
 - "profile_update" = information about a person to store (e.g. "John has 2 kids")
 - "note" = general information, no action implied
 
-Categories for urgency:
-- "today" = must handle today
-- "this_week" = handle this week
-- "this_month" = handle this month
-- "someday" = no time pressure
+Only use profile_update when text is PURELY personal info (family, hobbies, birthday). If ANY action is implied, use todo/followup/etc. When in doubt, use 'note' not 'profile_update'.
 
-Return JSON: {"item_type": "...", "urgency": "...", "linked_people": [...], "linked_projects": [...], "confidence": 0.0-1.0, "resolution_candidates": [...], "due_date": "..."}
+Return JSON: {"item_type": "...", "linked_people": [...], "linked_projects": [...], "confidence": 0.0-1.0, "resolution_candidates": [...], "due_date": "..."}
 
 linked_people should contain display names from the known people list that are mentioned or implied.
 linked_projects should contain project names from the known projects list that are mentioned or implied.
 resolution_candidates should contain UUIDs of open items this might resolve (if text is past-tense or completion-like).
-due_date should be an ISO date string (YYYY-MM-DD) if a specific deadline is mentioned (e.g. "by Friday", "before March 15", "end of week"). Return null if no date is mentioned."""
+due_date should be an ISO date string (YYYY-MM-DD) if a specific deadline is mentioned or implied (e.g. "by Friday", "before March 15", "end of week", "today", "tomorrow", "next week", "this week"). Return null if no date is mentioned."""
 
-    user_prompt = f"""Known people: {', '.join(people_names) if people_names else 'None'}
+    from datetime import date
+    user_prompt = f"""Today's date is {date.today().isoformat()}
+Known people: {', '.join(people_names) if people_names else 'None'}
 Known projects: {', '.join(project_names) if project_names else 'None'}
 {f'Open items for resolution matching: {open_items_context}' if open_items_context else ''}
 
