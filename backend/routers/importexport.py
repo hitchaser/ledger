@@ -241,8 +241,9 @@ def _generate_unique_display_name(full_name: str, taken_names: set) -> str:
 
 def _parse_org_xlsx(rows: list) -> tuple:
     """Normalize org XLSX rows. Returns (primary_rows, alias_map).
-    alias_map maps inherited ext_ids → primary ext_id for the same person."""
-    primary = []
+    alias_map maps duplicate/inherited ext_ids → primary ext_id for the same person.
+    Deduplicates by name — first primary row wins, subsequent same-name rows become aliases."""
+    all_rows = []
     inherited = []
     seen_ext_ids = set()
     for row in rows:
@@ -259,16 +260,26 @@ def _parse_org_xlsx(rows: list) -> tuple:
         if "(inherited)" in org_name:
             inherited.append(mapped)
         else:
-            primary.append(mapped)
+            all_rows.append(mapped)
 
-    # Build alias map: inherited ext_id → primary ext_id (matched by name)
-    primary_by_name = {}
-    for r in primary:
-        primary_by_name[r["name"].lower().strip()] = r["external_id"]
-
+    # Deduplicate primary rows by name — first occurrence wins, rest become aliases
+    primary = []
+    primary_by_name = {}  # name_lower → primary ext_id
     alias_map = {}
+
+    for r in all_rows:
+        name_l = r["name"].lower().strip()
+        if name_l in primary_by_name:
+            # Same name already has a primary — alias this ext_id to the first one
+            alias_map[r["external_id"]] = primary_by_name[name_l]
+        else:
+            primary.append(r)
+            primary_by_name[name_l] = r["external_id"]
+
+    # Also alias inherited rows to their primary
     for r in inherited:
-        primary_ext = primary_by_name.get(r["name"].lower().strip())
+        name_l = r["name"].lower().strip()
+        primary_ext = primary_by_name.get(name_l)
         if primary_ext:
             alias_map[r["external_id"]] = primary_ext
 
