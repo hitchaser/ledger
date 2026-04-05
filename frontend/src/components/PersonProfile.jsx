@@ -166,23 +166,23 @@ export default function PersonProfile({ refreshKey, onRefresh, itemUpdate }) {
         <ArrowLeft size={14} /> People
       </button>
 
-      <div className="flex items-start justify-between mb-4">
-        <div className="flex items-center gap-4">
+      <div className="flex items-start justify-between gap-4 mb-4">
+        <div className="flex items-center gap-4 min-w-0">
           <AvatarUpload
             src={person.avatar}
             name={person.display_name}
             onUpload={async (dataUrl) => { await api.updatePerson(id, { avatar: dataUrl }); const u = await api.getPerson(id); setPerson(u); }}
             onRemove={async () => { await api.updatePerson(id, { avatar: '' }); const u = await api.getPerson(id); setPerson(u); }}
           />
-          <div>
+          <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <h2 className="text-xl font-semibold text-zinc-100">{person.display_name}</h2>
+              <h2 className="text-xl font-semibold text-zinc-100 truncate">{person.display_name}</h2>
               <button onClick={() => setEditingDetails(!editingDetails)}
-                className="text-zinc-600 hover:text-zinc-300 transition-colors" title="Edit details">
+                className="text-zinc-600 hover:text-zinc-300 transition-colors flex-shrink-0" title="Edit details">
                 <Settings size={16} />
               </button>
             </div>
-            {person.name !== person.display_name && <p className="text-xs text-zinc-500">{person.name}</p>}
+            {person.name !== person.display_name && <p className="text-xs text-zinc-500 truncate">{person.name}</p>}
             <p className="text-sm text-zinc-600">
               {person.role || 'No role set'} &middot; {({'executive':'Executive','director':'Director','manager':'Manager','ic':'IC'})[person.reporting_level] || person.reporting_level}
               {person.email ? ` · ${person.email}` : ''}
@@ -190,7 +190,7 @@ export default function PersonProfile({ refreshKey, onRefresh, itemUpdate }) {
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-shrink-0">
           {person.is_archived && (
             <button onClick={() => setConfirmDelete(true)}
               className="flex items-center gap-1.5 text-xs rounded-lg px-3 py-2 text-rose-400/70 hover:text-rose-400 hover:bg-rose-500/10 border border-transparent hover:border-rose-500/20 transition-all">
@@ -198,19 +198,19 @@ export default function PersonProfile({ refreshKey, onRefresh, itemUpdate }) {
             </button>
           )}
           <button onClick={() => navigate(`/org-chart?focus=${id}`)}
-            className="flex items-center gap-1.5 text-xs glass glass-hover rounded-lg px-3 py-2 text-zinc-500 hover:text-zinc-200 transition-all">
+            className="flex items-center gap-1.5 text-xs glass glass-hover rounded-lg px-3 py-2 text-zinc-500 hover:text-zinc-200 transition-all whitespace-nowrap">
             <GitBranch size={14} /> See Org
           </button>
           <button onClick={() => setShowMerge(true)}
-            className="flex items-center gap-1.5 text-xs glass glass-hover rounded-lg px-3 py-2 text-zinc-500 hover:text-zinc-200 transition-all">
+            className="flex items-center gap-1.5 text-xs glass glass-hover rounded-lg px-3 py-2 text-zinc-500 hover:text-zinc-200 transition-all whitespace-nowrap">
             <Merge size={14} /> Merge
           </button>
           <button onClick={toggleArchive}
-            className="flex items-center gap-1.5 text-xs glass glass-hover rounded-lg px-3 py-2 text-zinc-500 hover:text-zinc-200 transition-all">
+            className="flex items-center gap-1.5 text-xs glass glass-hover rounded-lg px-3 py-2 text-zinc-500 hover:text-zinc-200 transition-all whitespace-nowrap">
             {person.is_archived ? <><ArchiveRestore size={14} /> Restore</> : <><Archive size={14} /> Archive</>}
           </button>
           <button onClick={startMeeting}
-            className="flex items-center gap-1.5 bg-blue-600/80 hover:bg-blue-500 text-white text-sm px-4 py-2 rounded-lg border border-blue-500/20 transition-all">
+            className="flex items-center gap-1.5 bg-blue-600/80 hover:bg-blue-500 text-white text-sm px-4 py-2 rounded-lg border border-blue-500/20 transition-all whitespace-nowrap">
             <Play size={14} /> Start Meeting
           </button>
         </div>
