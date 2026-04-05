@@ -22,8 +22,6 @@ export default function MeetingDetail({ refreshKey, onRefresh, itemUpdate }) {
   const [captureText, setCaptureText] = useState('');
   const [prep, setPrep] = useState(null);
   const [allProjects, setAllProjects] = useState([]);
-  const [showProjectPicker, setShowProjectPicker] = useState(false);
-  const [projectSearch, setProjectSearch] = useState('');
   const notesRef = useRef(null);
   const saveTimerRef = useRef(null);
   const captureInputRef = useRef(null);
@@ -212,14 +210,6 @@ export default function MeetingDetail({ refreshKey, onRefresh, itemUpdate }) {
     );
   }
 
-  // Filtered project list for picker
-  const filteredProjects = allProjects.filter(p =>
-    !p.is_archived &&
-    (projectSearch === '' ||
-      p.name.toLowerCase().includes(projectSearch.toLowerCase()) ||
-      (p.short_code && p.short_code.toLowerCase().includes(projectSearch.toLowerCase())))
-  );
-
   // Shared metadata section (used by both active and ended meetings)
   const metadataSection = (
     <div className="px-4 py-3 border-b border-white/[0.06] space-y-3 flex-shrink-0 bg-white/[0.01]">
@@ -256,39 +246,18 @@ export default function MeetingDetail({ refreshKey, onRefresh, itemUpdate }) {
           <FolderKanban size={12} /> Project
         </span>
         <div className="mt-1.5">
-          {meeting.project ? (
-            <div className="flex items-center gap-2">
+          <ProjectTypeahead
+            projects={allProjects}
+            onSelect={(p) => setProject(p.id)}
+            placeholder="Add project..."
+          />
+          {meeting.project && (
+            <div className="flex items-center gap-2 mt-2">
               <span className="badge bg-cyan-500/10 text-cyan-400 border border-cyan-500/15 cursor-pointer"
                 onClick={() => navigate(`/projects/${meeting.project.id}`)}>
                 {meeting.project.short_code || meeting.project.name}
               </span>
-              <button onClick={() => setProject('')} className="text-zinc-600 hover:text-zinc-300 transition-colors"><X size={12} /></button>
-            </div>
-          ) : (
-            <div className="relative">
-              <button onClick={() => setShowProjectPicker(!showProjectPicker)}
-                className="text-xs text-zinc-600 hover:text-zinc-300 glass rounded px-2 py-1 transition-all">
-                + Add Project
-              </button>
-              {showProjectPicker && (
-                <div className="absolute z-50 top-full left-0 mt-1 w-64 rounded-lg border border-white/10 shadow-xl bg-zinc-900/95 backdrop-blur-xl">
-                  <input value={projectSearch} onChange={e => setProjectSearch(e.target.value)}
-                    placeholder="Search projects..."
-                    className="w-full bg-transparent px-3 py-2 text-sm text-zinc-200 outline-none border-b border-white/[0.06] placeholder-zinc-600"
-                    autoFocus />
-                  <div className="max-h-48 overflow-y-auto">
-                    {filteredProjects.map(p => (
-                      <button key={p.id} onClick={() => setProject(p.id)}
-                        className="w-full text-left px-3 py-1.5 text-sm text-zinc-300 hover:bg-white/[0.05] transition-colors">
-                        {p.name} {p.short_code && <span className="text-xs text-zinc-600">[{p.short_code}]</span>}
-                      </button>
-                    ))}
-                    {filteredProjects.length === 0 && (
-                      <div className="px-3 py-2 text-xs text-zinc-600">No projects found</div>
-                    )}
-                  </div>
-                </div>
-              )}
+              <button onClick={() => setProject('')} className="text-cyan-600 hover:text-cyan-300 transition-colors"><X size={10} /></button>
             </div>
           )}
         </div>
@@ -428,6 +397,71 @@ export default function MeetingDetail({ refreshKey, onRefresh, itemUpdate }) {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+
+function ProjectTypeahead({ projects, onSelect, placeholder = "Search projects..." }) {
+  const [query, setQuery] = useState('');
+  const [open, setOpen] = useState(false);
+  const [highlightIdx, setHighlightIdx] = useState(0);
+  const inputRef = useRef(null);
+  const containerRef = useRef(null);
+
+  const filtered = projects.filter(p =>
+    !p.is_archived &&
+    (query === '' ||
+      p.name.toLowerCase().includes(query.toLowerCase()) ||
+      (p.short_code && p.short_code.toLowerCase().includes(query.toLowerCase())))
+  ).slice(0, 10);
+
+  const handleSelect = (project) => {
+    setQuery('');
+    setOpen(false);
+    onSelect(project);
+    setTimeout(() => inputRef.current?.focus(), 50);
+  };
+
+  const handleKeyDown = (e) => {
+    if (!open || filtered.length === 0) return;
+    if (e.key === 'ArrowDown') { e.preventDefault(); setHighlightIdx(i => Math.min(i + 1, filtered.length - 1)); }
+    if (e.key === 'ArrowUp') { e.preventDefault(); setHighlightIdx(i => Math.max(i - 1, 0)); }
+    if (e.key === 'Enter') { e.preventDefault(); handleSelect(filtered[highlightIdx]); }
+    if (e.key === 'Escape') { setOpen(false); }
+  };
+
+  useEffect(() => {
+    const handler = (e) => {
+      if (containerRef.current && !containerRef.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  return (
+    <div ref={containerRef} className="relative z-50 w-56">
+      <input
+        ref={inputRef}
+        value={query}
+        onChange={e => { setQuery(e.target.value); setOpen(true); setHighlightIdx(0); }}
+        onFocus={() => setOpen(true)}
+        onKeyDown={handleKeyDown}
+        placeholder={placeholder}
+        className="w-full glass-input rounded px-3 py-1.5 text-sm text-zinc-200 outline-none"
+      />
+      {open && query.length > 0 && filtered.length > 0 && (
+        <div className="absolute z-50 top-full left-0 right-0 mt-1 rounded-lg border border-white/10 max-h-48 overflow-y-auto shadow-xl bg-zinc-900/95 backdrop-blur-xl">
+          {filtered.map((p, idx) => (
+            <button key={p.id} onClick={() => handleSelect(p)}
+              className={`w-full text-left px-3 py-1.5 text-sm transition-colors ${
+                idx === highlightIdx ? 'bg-blue-500/15 text-zinc-200' : 'text-zinc-300 hover:bg-white/[0.04]'
+              }`}>
+              {p.name} {p.short_code && <span className="text-xs text-zinc-600">[{p.short_code}]</span>}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
