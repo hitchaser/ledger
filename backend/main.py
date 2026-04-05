@@ -64,35 +64,11 @@ if "import_source" not in _people_cols:
         conn.execute(sa_text("ALTER TABLE people ADD COLUMN import_source VARCHAR"))
     logger.info("Migrated people table: added import_source")
 
-# One-time: reset org-imported display names back to full name
-# (previous import used shortened "First L" format, now we use full names)
-try:
-    with engine.begin() as conn:
-        result = conn.execute(sa_text(
-            "UPDATE people SET display_name = name "
-            "WHERE import_source = 'org_import' AND display_name != name"
-        ))
-        if result.rowcount > 0:
-            logger.info(f"Reset {result.rowcount} org-imported display names to full names")
-except Exception as e:
-    logger.warning(f"Display name reset skipped: {e}")
 
-# One-time: clean wipe of all org-imported people for fresh re-import
-# Manual people (no import_source) and their data are preserved
-try:
-    _db = SessionLocal()
-    from models import ProfileLog as _ProfileLog, PersonProject as _PersonProject
-    _org_ids = [p.id for p in _db.query(Person).filter(Person.import_source == "org_import").all()]
-    if _org_ids:
-        _db.query(CaptureItemPerson).filter(CaptureItemPerson.person_id.in_(_org_ids)).delete(synchronize_session=False)
-        _db.query(_ProfileLog).filter(_ProfileLog.person_id.in_(_org_ids)).delete(synchronize_session=False)
-        _db.query(_PersonProject).filter(_PersonProject.person_id.in_(_org_ids)).delete(synchronize_session=False)
-        _db.query(Person).filter(Person.id.in_(_org_ids)).delete(synchronize_session=False)
-        _db.commit()
-        logger.info(f"Clean wiped {len(_org_ids)} org-imported people for fresh re-import")
-    _db.close()
-except Exception as e:
-    logger.warning(f"Org wipe skipped: {e}")
+
+
+
+
 if "avatar" not in _people_cols:
     with engine.begin() as conn:
         conn.execute(sa_text("ALTER TABLE people ADD COLUMN avatar TEXT"))

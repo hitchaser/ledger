@@ -239,9 +239,11 @@ def _generate_unique_display_name(full_name: str, taken_names: set) -> str:
     return candidate
 
 
-def _parse_org_xlsx(rows: list) -> list:
-    """Normalize org XLSX rows using column name mapping. Skips inherited duplicates."""
-    result = []
+def _parse_org_xlsx(rows: list) -> tuple:
+    """Normalize org XLSX rows. Returns (primary_rows, alias_map).
+    alias_map maps inherited ext_ids → primary ext_id for the same person."""
+    primary = []
+    inherited = []
     seen_ext_ids = set()
     for row in rows:
         mapped = {}
@@ -250,16 +252,27 @@ def _parse_org_xlsx(rows: list) -> list:
             mapped[key] = (value or "").strip()
         if not mapped.get("external_id") or not mapped.get("name"):
             continue
-        # Skip inherited duplicate rows
-        org_name = mapped.get("org_name", "").lower()
-        if "(inherited)" in org_name:
-            continue
-        # Skip if we already have this external_id (true duplicate row)
         if mapped["external_id"] in seen_ext_ids:
             continue
         seen_ext_ids.add(mapped["external_id"])
-        result.append(mapped)
-    return result
+        org_name = mapped.get("org_name", "").lower()
+        if "(inherited)" in org_name:
+            inherited.append(mapped)
+        else:
+            primary.append(mapped)
+
+    # Build alias map: inherited ext_id → primary ext_id (matched by name)
+    primary_by_name = {}
+    for r in primary:
+        primary_by_name[r["name"].lower().strip()] = r["external_id"]
+
+    alias_map = {}
+    for r in inherited:
+        primary_ext = primary_by_name.get(r["name"].lower().strip())
+        if primary_ext:
+            alias_map[r["external_id"]] = primary_ext
+
+    return primary, alias_map
 
 
 @router.post("/org-preview")
@@ -270,13 +283,15 @@ async def org_preview(file: UploadFile = File(...), db: Session = Depends(get_db
     if not rows:
         raise HTTPException(400, "No data found in file")
 
-    org_rows = _parse_org_xlsx(rows)
+    org_rows, alias_map = _parse_org_xlsx(rows)
     if not org_rows:
         raise HTTPException(400, "No valid rows found. Expected columns: Unique Identifier, Name, Reports To, Line Detail 1, Line Detail 2, Organization Name")
 
     # Load existing people with external_ids
     existing_by_ext = {p.external_id: p for p in db.query(Person).filter(Person.external_id != None).all()}
     imported_ext_ids = {r["external_id"] for r in org_rows}
+    # Include aliased IDs as "present" so inherited people don't get archived
+    imported_ext_ids.update(alias_map.keys())
 
     creates = []
     updates = []
@@ -340,12 +355,13 @@ async def org_commit(file: UploadFile = File(...), db: Session = Depends(get_db)
     if not rows:
         raise HTTPException(400, "No data found in file")
 
-    org_rows = _parse_org_xlsx(rows)
+    org_rows, alias_map = _parse_org_xlsx(rows)
     if not org_rows:
         raise HTTPException(400, "No valid org rows found")
 
     existing_by_ext = {p.external_id: p for p in db.query(Person).filter(Person.external_id != None).all()}
     imported_ext_ids = {r["external_id"] for r in org_rows}
+    imported_ext_ids.update(alias_map.keys())  # inherited IDs count as present
     created_count = 0
     updated_count = 0
     archived_count = 0
@@ -416,13 +432,15 @@ async def org_commit(file: UploadFile = File(...), db: Session = Depends(get_db)
             ext_to_person[ext_id] = person
             created_count += 1
 
-    # Pass 2: Resolve manager references via external_id
+    # Pass 2: Resolve manager references via external_id (with alias resolution)
     for r in org_rows:
         ext_id = r["external_id"]
         reports_to = r.get("reports_to", "").strip()
         person = ext_to_person.get(ext_id)
         if person and reports_to:
-            manager = ext_to_person.get(reports_to)
+            # Resolve through alias map — inherited ext_id → primary ext_id
+            resolved_to = alias_map.get(reports_to, reports_to)
+            manager = ext_to_person.get(resolved_to)
             if manager:
                 person.manager_id = manager.id
             else:
