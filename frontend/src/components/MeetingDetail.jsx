@@ -60,6 +60,17 @@ export default function MeetingDetail({ refreshKey, onRefresh, itemUpdate }) {
   useEffect(() => { if (meeting) loadItems(); }, [meeting?.id, meeting?.attendees?.length, meeting?.project_id]);
   useEffect(() => { api.listProjects().then(setAllProjects).catch(() => {}); }, []);
 
+  // Auto-end active meeting if user navigates away
+  useEffect(() => {
+    if (!meeting || meeting.ended_at) return;
+    return () => {
+      // Fire-and-forget: end the active session on unmount
+      api.getActiveMeeting().then(s => {
+        if (s && s.id) api.endMeeting(s.id).catch(() => {});
+      }).catch(() => {});
+    };
+  }, [meeting?.id, meeting?.ended_at]);
+
   // Load prep stats for first attendee or project
   useEffect(() => {
     if (!meeting) return;

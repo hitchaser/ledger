@@ -1,22 +1,34 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import Avatar from './Avatar';
-import { Plus, Radio } from 'lucide-react';
+import { Plus, Radio, Search } from 'lucide-react';
 
 export default function MeetingsList() {
   const navigate = useNavigate();
   const [meetings, setMeetings] = useState([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
 
   useEffect(() => {
-    api.listMeetings({ limit: 100 }).then(data => {
+    api.listMeetings({ limit: 200 }).then(data => {
       setMeetings(data.meetings || []);
       setTotal(data.total || 0);
       setLoading(false);
     });
   }, []);
+
+  const filtered = useMemo(() => {
+    if (!search.trim()) return meetings;
+    const q = search.toLowerCase();
+    return meetings.filter(m => {
+      const title = (m.title || '').toLowerCase();
+      const attendees = (m.attendees || []).map(a => a.display_name.toLowerCase()).join(' ');
+      const project = m.project ? (m.project.name + ' ' + (m.project.short_code || '')).toLowerCase() : '';
+      return title.includes(q) || attendees.includes(q) || project.includes(q);
+    });
+  }, [meetings, search]);
 
   const newMeeting = async () => {
     try {
@@ -45,13 +57,26 @@ export default function MeetingsList() {
         </button>
       </div>
 
+      {meetings.length > 5 && (
+        <div className="flex items-center gap-2 mb-3 glass rounded-lg px-3 py-2">
+          <Search size={14} className="text-zinc-600 flex-shrink-0" />
+          <input value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="Filter by title, attendee, or project..."
+            className="flex-1 bg-transparent text-sm text-zinc-200 outline-none placeholder-zinc-600" />
+        </div>
+      )}
+
       {meetings.length === 0 ? (
         <div className="text-center text-zinc-700 py-16 text-sm">
           No meetings yet. Start one to begin tracking.
         </div>
+      ) : filtered.length === 0 ? (
+        <div className="text-center text-zinc-700 py-12 text-sm">
+          No meetings match "{search}"
+        </div>
       ) : (
         <div className="flex flex-col gap-1">
-          {meetings.map(m => {
+          {filtered.map(m => {
             const isActive = !m.ended_at;
             const date = new Date(m.started_at);
             const title = m.title || 'Untitled Meeting';

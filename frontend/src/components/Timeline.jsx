@@ -1,4 +1,5 @@
 import { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import { Clock, CheckCircle, Users, FileText, MessageSquare, ChevronDown, ChevronUp } from 'lucide-react';
 
@@ -62,6 +63,7 @@ function ClampedText({ text, eventKey }) {
 }
 
 export default function Timeline() {
+  const navigate = useNavigate();
   const [data, setData] = useState(null);
   const [days, setDays] = useState(7);
 
@@ -114,8 +116,11 @@ export default function Timeline() {
             {events.map((e, i) => {
               const cfg = EVENT_ICONS[e.type] || EVENT_ICONS.item_created;
               const Icon = cfg.icon;
+              const isMeeting = e.type === 'meeting';
               return (
-                <div key={i} className="flex items-start gap-3 glass rounded-lg px-3 py-2">
+                <div key={i}
+                  className={`flex items-start gap-3 glass rounded-lg px-3 py-2 ${isMeeting ? 'cursor-pointer hover:bg-white/[0.04]' : ''}`}
+                  onClick={isMeeting && e.meeting_id ? () => navigate(`/meetings/${e.meeting_id}`) : undefined}>
                   <Icon size={14} className={`mt-0.5 flex-shrink-0 ${cfg.color}`} />
                   <div className="flex-1 min-w-0">
                     <ClampedText text={e.text} eventKey={`${date}-${i}`} />
@@ -129,8 +134,16 @@ export default function Timeline() {
                         {e.projects.map(p => <span key={p.id} className="badge bg-cyan-500/10 text-cyan-400 border border-cyan-500/15">{p.short_code || p.name}</span>)}
                       </div>
                     )}
-                    {e.type === 'meeting' && (
-                      <span className="text-xs text-zinc-600">{e.items_resolved} resolved, {e.items_added} added</span>
+                    {isMeeting && (
+                      <div className="flex items-center gap-2 mt-1">
+                        {e.attendees?.length > 0 && (
+                          <span className="text-xs text-indigo-400/60">{e.attendees.join(', ')}</span>
+                        )}
+                        {e.project_name && (
+                          <span className="text-xs text-cyan-400/60">{e.project_name}</span>
+                        )}
+                        <span className="text-xs text-zinc-600">{e.items_resolved} resolved, {e.items_added} added</span>
+                      </div>
                     )}
                   </div>
                   <span className="text-xs text-zinc-700 flex-shrink-0">{formatDate(e.timestamp)}</span>

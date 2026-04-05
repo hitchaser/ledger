@@ -52,6 +52,8 @@ export default function ItemCard({ item, onUpdate, compact = false, readonly = f
   const [showPredPicker, setShowPredPicker] = useState(false);
   const [openItems, setOpenItems] = useState([]);
   const [predSearch, setPredSearch] = useState('');
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showRecurrencePicker, setShowRecurrencePicker] = useState(false);
   const type = item.effective_type;
   const isProcessing = !item.ai_processed_at && !item.manual_type;
   const isDone = item.status === 'done';
@@ -108,6 +110,18 @@ export default function ItemCard({ item, onUpdate, compact = false, readonly = f
     if (!newNote.trim()) return;
     await api.addNote(item.id, newNote.trim());
     setNewNote('');
+    onUpdate?.();
+  };
+
+  const quickSetDueDate = async (dateStr) => {
+    await api.updateCapture(item.id, { due_date: dateStr || '' });
+    setShowDatePicker(false);
+    onUpdate?.();
+  };
+
+  const quickSetRecurrence = async (rec) => {
+    await api.updateCapture(item.id, { recurrence: rec || '' });
+    setShowRecurrencePicker(false);
     onUpdate?.();
   };
 
@@ -254,9 +268,17 @@ export default function ItemCard({ item, onUpdate, compact = false, readonly = f
           </div>
         )}
         {!readonly && !editing && (
-          <div className="flex items-center gap-0.5 md:opacity-0 md:group-hover:opacity-100 transition-all">
+          <div className="flex items-center gap-0.5 md:opacity-0 md:group-hover:opacity-100 transition-all relative">
             <button onClick={togglePin} className={`mt-0.5 p-1 transition-all ${item.is_pinned ? 'text-blue-400' : 'text-zinc-700 hover:text-zinc-400'}`} title={item.is_pinned ? 'Unpin' : 'Pin'}>
               {item.is_pinned ? <PinOff size={13} /> : <Pin size={13} />}
+            </button>
+            <button onClick={() => { setShowDatePicker(!showDatePicker); setShowRecurrencePicker(false); }}
+              className={`mt-0.5 p-1 transition-all ${item.due_date ? 'text-zinc-400' : 'text-zinc-700 hover:text-zinc-400'}`} title="Set due date">
+              <Calendar size={13} />
+            </button>
+            <button onClick={() => { setShowRecurrencePicker(!showRecurrencePicker); setShowDatePicker(false); }}
+              className={`mt-0.5 p-1 transition-all ${item.recurrence ? 'text-violet-400' : 'text-zinc-700 hover:text-zinc-400'}`} title="Set recurrence">
+              <Repeat size={13} />
             </button>
             <button onClick={() => setShowNotes(!showNotes)} className="mt-0.5 p-1 text-zinc-700 hover:text-zinc-400" title="Notes">
               <MessageSquare size={13} />
@@ -267,6 +289,49 @@ export default function ItemCard({ item, onUpdate, compact = false, readonly = f
             <button onClick={deleteItem} className="mt-0.5 p-1 text-zinc-700 hover:text-rose-400" title="Delete">
               <X size={14} />
             </button>
+            {showDatePicker && (
+              <div className="absolute right-0 top-full mt-1 z-50 rounded-lg border border-white/10 shadow-xl bg-zinc-900/95 backdrop-blur-xl p-2 min-w-[160px]">
+                <input type="date" defaultValue={item.due_date ? new Date(item.due_date).toISOString().split('T')[0] : ''}
+                  onChange={e => quickSetDueDate(e.target.value)}
+                  className="w-full glass-input rounded px-2 py-1 text-xs text-zinc-300 outline-none mb-1" autoFocus />
+                <div className="flex flex-col gap-0.5">
+                  {[
+                    { label: 'Today', value: new Date().toISOString().split('T')[0] },
+                    { label: 'Tomorrow', value: new Date(Date.now() + 86400000).toISOString().split('T')[0] },
+                    { label: 'Next week', value: new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0] },
+                  ].map(opt => (
+                    <button key={opt.label} onClick={() => quickSetDueDate(opt.value)}
+                      className="text-left text-xs text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.05] px-2 py-1 rounded transition-colors">
+                      {opt.label}
+                    </button>
+                  ))}
+                  {item.due_date && (
+                    <button onClick={() => quickSetDueDate('')}
+                      className="text-left text-xs text-rose-400/70 hover:text-rose-400 hover:bg-rose-500/10 px-2 py-1 rounded transition-colors">
+                      Clear date
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+            {showRecurrencePicker && (
+              <div className="absolute right-0 top-full mt-1 z-50 rounded-lg border border-white/10 shadow-xl bg-zinc-900/95 backdrop-blur-xl p-1 min-w-[120px]">
+                {['daily', 'weekly', 'biweekly', 'monthly'].map(r => (
+                  <button key={r} onClick={() => quickSetRecurrence(r)}
+                    className={`w-full text-left text-xs px-2 py-1.5 rounded transition-colors ${
+                      item.recurrence === r ? 'text-violet-400 bg-violet-500/10' : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.05]'
+                    }`}>
+                    {r}
+                  </button>
+                ))}
+                {item.recurrence && (
+                  <button onClick={() => quickSetRecurrence('')}
+                    className="w-full text-left text-xs text-rose-400/70 hover:text-rose-400 hover:bg-rose-500/10 px-2 py-1.5 rounded transition-colors">
+                    No repeat
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>

@@ -52,19 +52,16 @@ def get_timeline(
         MeetingSession.ended_at != None,
     ).order_by(MeetingSession.started_at.desc()).all()
     for m in meetings:
-        name = ""
-        if m.person_id:
-            person = db.query(Person).get(m.person_id)
-            if person:
-                name = person.display_name
-        elif m.project_id:
-            project = db.query(Project).get(m.project_id)
-            if project:
-                name = project.name
+        attendee_names = [p.display_name for p in (m.attendees or [])]
+        title = m.title or ("Meeting with " + ", ".join(attendee_names) if attendee_names else "Meeting")
+        project_name = m.project.name if m.project else None
         events.append({
             "type": "meeting",
             "timestamp": m.started_at.isoformat(),
-            "text": f"Meeting with {name}",
+            "text": title,
+            "meeting_id": str(m.id),
+            "attendees": attendee_names,
+            "project_name": project_name,
             "items_resolved": m.items_resolved,
             "items_added": m.items_added,
         })
