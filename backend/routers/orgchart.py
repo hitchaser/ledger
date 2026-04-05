@@ -145,6 +145,18 @@ def get_focused_tree(focus: Optional[str] = Query(None), db: Session = Depends(g
     if not focus_person:
         return {"tree": [], "focus_id": focus_id, "chain": [], "total": total}
 
+    # Pre-compute org_count (total people under each person, recursive)
+    _org_count_cache = {}
+    def _calc_org_count(pid):
+        if pid in _org_count_cache:
+            return _org_count_cache[pid]
+        directs = children_map.get(pid, [])
+        count = len(directs)
+        for d in directs:
+            count += _calc_org_count(str(d.id))
+        _org_count_cache[pid] = count
+        return count
+
     def person_node(p):
         pid = str(p.id)
         return {
@@ -156,7 +168,8 @@ def get_focused_tree(focus: Optional[str] = Query(None), db: Session = Depends(g
             "reporting_level": p.reporting_level.value if p.reporting_level else "other",
             "manager_id": str(p.manager_id) if p.manager_id else None,
             "child_count": len(children_map.get(pid, [])),
-            "children": None,  # null = not loaded, [] = loaded but empty
+            "org_count": _calc_org_count(pid),
+            "children": None,
         }
 
     # Build chain from focus to root
@@ -216,23 +229,25 @@ def get_focused_tree(focus: Optional[str] = Query(None), db: Session = Depends(g
 @router.get("/children/{person_id}")
 def get_org_children(person_id: UUID, db: Session = Depends(get_db)):
     """Return direct children of a person — for lazy loading on expand."""
-    children = db.query(Person).filter(
-        Person.manager_id == person_id,
-        Person.is_archived == False,
-    ).order_by(Person.display_name).all()
+    # Load all people to compute org_count efficiently
+    all_people = db.query(Person).filter(Person.is_archived == False).all()
+    cm = {}  # parent_id_str → [Person]
+    for p in all_people:
+        if p.manager_id:
+            cm.setdefault(str(p.manager_id), []).append(p)
 
-    # Get child counts for each child
-    all_ids = [c.id for c in children]
-    child_counts = {}
-    if all_ids:
-        from sqlalchemy import func
-        counts = db.query(
-            Person.manager_id, func.count(Person.id)
-        ).filter(
-            Person.manager_id.in_(all_ids),
-            Person.is_archived == False,
-        ).group_by(Person.manager_id).all()
-        child_counts = dict(counts)
+    _oc_cache = {}
+    def _org_count(pid):
+        if pid in _oc_cache:
+            return _oc_cache[pid]
+        directs = cm.get(pid, [])
+        count = len(directs)
+        for d in directs:
+            count += _org_count(str(d.id))
+        _oc_cache[pid] = count
+        return count
+
+    children = sorted(cm.get(str(person_id), []), key=lambda p: p.display_name)
 
     return [{
         "id": str(c.id),
@@ -242,7 +257,8 @@ def get_org_children(person_id: UUID, db: Session = Depends(get_db)):
         "avatar": c.avatar,
         "reporting_level": c.reporting_level.value if c.reporting_level else "other",
         "manager_id": str(c.manager_id) if c.manager_id else None,
-        "child_count": child_counts.get(c.id, 0),
+        "child_count": len(cm.get(str(c.id), [])),
+        "org_count": _org_count(str(c.id)),
     } for c in children]
 
 
