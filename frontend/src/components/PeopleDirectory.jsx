@@ -10,7 +10,7 @@ const LEVEL_COLORS = {
   ic: 'bg-sky-500/15 text-sky-400 border border-sky-500/20',
 };
 
-const LEVEL_LABELS = { executive: 'Executive', manager: 'Manager', ic: 'IC' };
+const LEVEL_LABELS = { executive: 'Executive', manager: 'Management', ic: 'IC' };
 const PAGE_SIZE = 50;
 
 export default function PeopleDirectory({ refreshKey }) {
@@ -99,7 +99,7 @@ export default function PeopleDirectory({ refreshKey }) {
           <select value={form.reporting_level} onChange={e => setForm({...form, reporting_level: e.target.value})}
             className="glass-input rounded px-3 py-1.5 text-sm text-zinc-300">
             <option value="executive">Executive</option>
-            <option value="manager">Manager</option>
+            <option value="manager">Management</option>
             <option value="ic">Individual Contributor</option>
           </select>
           <div className="col-span-2 border-t border-white/[0.04] pt-2 mt-1">

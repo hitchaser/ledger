@@ -585,14 +585,19 @@ async def org_commit(file: UploadFile = File(...), db: Session = Depends(get_db)
                     p.is_archived = True
                     archived_count += 1
 
-    # Pass 4: Infer reporting_level from tree structure
+    # Pass 4: Infer reporting_level from title + tree structure
+    _exec_keywords = ['evp', 'svp', 'vp ', 'vice president', 'chief', 'president', 'head of', 'director']
     has_reports = set()
     for person in ext_to_person.values():
         if person.manager_id:
             has_reports.add(person.manager_id)
     for person in ext_to_person.values():
-        if person.id in has_reports:
-            person.reporting_level = ReportingLevel.executive if not person.manager_id else ReportingLevel.manager
+        role_lower = (person.role or "").lower()
+        is_exec_title = any(kw in role_lower for kw in _exec_keywords)
+        if is_exec_title:
+            person.reporting_level = ReportingLevel.executive
+        elif person.id in has_reports:
+            person.reporting_level = ReportingLevel.manager
         else:
             person.reporting_level = ReportingLevel.ic
 

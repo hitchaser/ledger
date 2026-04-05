@@ -159,7 +159,7 @@ export default function PersonProfile({ refreshKey, onRefresh, itemUpdate }) {
             </div>
             {person.name !== person.display_name && <p className="text-xs text-zinc-500">{person.name}</p>}
             <p className="text-sm text-zinc-600">
-              {person.role || 'No role set'} &middot; {({'executive':'Executive','manager':'Manager','ic':'IC'})[person.reporting_level] || person.reporting_level}
+              {person.role || 'No role set'} &middot; {({'executive':'Executive','manager':'Management','ic':'IC'})[person.reporting_level] || person.reporting_level}
               {person.email ? ` · ${person.email}` : ''}
               {person.manager && <> &middot; Reports to <Link to={`/people/${person.manager.id}`} className="text-blue-400 hover:text-blue-300">{person.manager.display_name}</Link></>}
             </p>
@@ -214,7 +214,7 @@ export default function PersonProfile({ refreshKey, onRefresh, itemUpdate }) {
               <select value={detailsForm.reporting_level} onChange={e => setDetailsForm({...detailsForm, reporting_level: e.target.value})}
                 className="w-full glass-input rounded px-3 py-1.5 text-sm text-zinc-300 outline-none">
                 <option value="executive">Executive</option>
-                <option value="manager">Manager</option>
+                <option value="manager">Management</option>
                 <option value="ic">Individual Contributor</option>
               </select>
             </div>
