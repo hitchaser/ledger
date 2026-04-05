@@ -33,8 +33,13 @@ export default function PersonTypeahead({ value, onChange, exclude = [], placeho
   const handleInput = (e) => {
     const q = e.target.value;
     setQuery(q);
-    setOpen(true);
-    search(q);
+    if (q) {
+      setOpen(true);
+      search(q);
+    } else {
+      setOpen(false);
+      setResults([]);
+    }
   };
 
   const handleSelect = (person) => {
