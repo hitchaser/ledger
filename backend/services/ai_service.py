@@ -253,13 +253,21 @@ Examples:
 # ── Meeting Summary ──
 
 def generate_meeting_summary(context_name: str, context_notes: str,
-                              items: list) -> Optional[str]:
+                              items: list, attendee_names: list = None) -> Optional[str]:
     """Generate a structured meeting summary from item data."""
     resolved = [i for i in items if i.status and i.status.value == "done"]
     added = [i for i in items if i.status and i.status.value == "open"]
 
-    lines = [f"Meeting with {context_name}"]
+    lines = [f"Meeting: {context_name}"]
+    if attendee_names:
+        lines.append(f"Attendees: {', '.join(attendee_names)}")
     lines.append("")
+
+    if context_notes:
+        lines.append("Notes:")
+        for line in context_notes.strip().split("\n"):
+            lines.append(f"  {line}")
+        lines.append("")
 
     if resolved:
         lines.append("Discussed / Completed:")
@@ -272,7 +280,7 @@ def generate_meeting_summary(context_name: str, context_notes: str,
         for i in added:
             lines.append(f"  • {i.raw_text}")
 
-    if not resolved and not added:
+    if not resolved and not added and not context_notes:
         lines.append("General sync — no items added or completed.")
 
     return "\n".join(lines)

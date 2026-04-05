@@ -1,0 +1,99 @@
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { api } from '../api/client';
+import Avatar from './Avatar';
+import { Plus, Radio } from 'lucide-react';
+
+export default function MeetingsList() {
+  const navigate = useNavigate();
+  const [meetings, setMeetings] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    api.listMeetings({ limit: 100 }).then(data => {
+      setMeetings(data.meetings || []);
+      setTotal(data.total || 0);
+      setLoading(false);
+    });
+  }, []);
+
+  const newMeeting = async () => {
+    try {
+      const session = await api.startMeeting({});
+      navigate(`/meetings/${session.id}`);
+    } catch (e) {
+      if (e.message.includes('409')) {
+        if (confirm('There is an active meeting session. End it and start a new one?')) {
+          await api.forceEndActiveMeeting();
+          const session = await api.startMeeting({});
+          navigate(`/meetings/${session.id}`);
+        }
+      }
+    }
+  };
+
+  if (loading) return <div className="p-8 text-zinc-600">Loading...</div>;
+
+  return (
+    <div className="max-w-3xl mx-auto px-4 py-4">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-lg font-semibold text-zinc-100">Meetings</h2>
+        <button onClick={newMeeting}
+          className="flex items-center gap-1.5 bg-blue-600/80 hover:bg-blue-500 text-white text-sm px-4 py-2 rounded-lg border border-blue-500/20 transition-all">
+          <Plus size={14} /> New Meeting
+        </button>
+      </div>
+
+      {meetings.length === 0 ? (
+        <div className="text-center text-zinc-700 py-16 text-sm">
+          No meetings yet. Start one to begin tracking.
+        </div>
+      ) : (
+        <div className="flex flex-col gap-1">
+          {meetings.map(m => {
+            const isActive = !m.ended_at;
+            const date = new Date(m.started_at);
+            const title = m.title || 'Untitled Meeting';
+            return (
+              <button key={m.id} onClick={() => navigate(`/meetings/${m.id}`)}
+                className="w-full flex items-center gap-3 px-4 py-3 glass rounded-lg hover:bg-white/[0.04] transition-all text-left">
+                {isActive && (
+                  <Radio size={14} className="text-emerald-400 animate-pulse flex-shrink-0" />
+                )}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className={`text-sm font-medium truncate ${isActive ? 'text-emerald-300' : 'text-zinc-200'}`}>
+                      {title}
+                    </span>
+                    {m.project && (
+                      <span className="text-xs text-cyan-400/70 flex-shrink-0">{m.project.short_code || m.project.name}</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className="text-xs text-zinc-600">
+                      {date.toLocaleDateString()} {date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                    {!isActive && m.items_resolved + m.items_added > 0 && (
+                      <span className="text-xs text-zinc-700">
+                        {m.items_resolved} resolved &middot; {m.items_added} added
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center -space-x-1.5 flex-shrink-0">
+                  {(m.attendees || []).slice(0, 4).map(a => (
+                    <Avatar key={a.id} src={a.avatar} name={a.display_name} size="xs" />
+                  ))}
+                  {(m.attendees || []).length > 4 && (
+                    <span className="text-xs text-zinc-600 ml-1">+{m.attendees.length - 4}</span>
+                  )}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}

@@ -39,8 +39,11 @@ Live at: **https://ledger.hitchaser.com**
 - Fields: name, short_code, status, context_notes, is_archived
 - Relations: capture_items, profile_logs, people (many-to-many via person_projects)
 
-**MeetingSession** — logged meeting mode session.
-- Fields: started_at, ended_at, person_id, project_id, items_resolved, items_added, ai_summary
+**MeetingSession** — first-class meeting entity with notes.
+- Fields: started_at, ended_at, title, notes, person_id (legacy), project_id, items_resolved, items_added, ai_summary
+- Relations: attendees (many-to-many via MeetingAttendee), project, capture_items
+
+**MeetingAttendee** — junction table for meeting-to-person many-to-many (meeting_id, person_id).
 
 **ProfileLog** — timestamped history entries (meeting summaries, profile updates, manual notes).
 
@@ -120,10 +123,14 @@ Live at: **https://ledger.hitchaser.com**
 - **GET /api/projects/:id/logs** — project's profile logs
 
 ### Meetings
-- **POST /api/meetings** — start meeting session (one active at a time, 409 if already active)
+- **GET /api/meetings** — list meetings (pagination: limit, offset; filters: active_only, person_id, project_id; returns {meetings: [], total: N})
+- **POST /api/meetings** — start meeting session (title, person_id, project_id, attendee_ids; one active at a time, 409 if already active)
 - **GET /api/meetings/active** — get active meeting
-- **GET /api/meetings/:id** — get meeting by ID
-- **PATCH /api/meetings/:id/end** — end meeting, generates AI summary, creates ProfileLog
+- **GET /api/meetings/:id** — get meeting by ID (includes attendees[], project)
+- **PATCH /api/meetings/:id** — update meeting (title, notes, project_id)
+- **POST /api/meetings/:id/attendees/:pid** — add attendee
+- **DELETE /api/meetings/:id/attendees/:pid** — remove attendee
+- **PATCH /api/meetings/:id/end** — end meeting, generates AI summary with notes context, creates ProfileLog per attendee + project
 - **GET /api/meetings/prep/:entity_type/:entity_id** — meeting prep stats (last_meeting date, days_since, new_items, items_resolved, open_items)
 
 ### Digest
@@ -136,7 +143,7 @@ Live at: **https://ledger.hitchaser.com**
   - orphaned_items: open, no person or project links
 
 ### Search
-- **GET /api/search?q=** — universal search across items (raw_text + note content), people (name, display_name, role, email), projects (name, short_code, context_notes). Min 2 chars. Returns categorized results.
+- **GET /api/search?q=** — universal search across items (raw_text + note content), people (name, display_name, role, email), projects (name, short_code, context_notes), meetings (title, notes). Min 2 chars. Returns categorized results.
 
 ### Timeline
 - **GET /api/timeline?days=N** — activity timeline for past N days. Events: item_created, item_resolved, meeting, profile_update, meeting_summary. Includes summary stats.
@@ -210,7 +217,9 @@ Live at: **https://ledger.hitchaser.com**
 | /people/:id | PersonProfile | Full profile: structured fields, avatar, items, logs, project assignments |
 | /projects | ProjectDirectory | Project list with status, archive toggle |
 | /projects/:id | ProjectCard | Project detail: items, logs, people assignments |
-| /meeting/:type/:id | MeetingMode | Two-column meeting view (sidebar hidden) |
+| /meetings | MeetingsList | Meeting list with search, new meeting button |
+| /meetings/:id | MeetingDetail | Notes-first meeting view with attendees, capture |
+| /meeting/:type/:id | MeetingMode | Legacy redirect — creates meeting → navigates to /meetings/:id |
 | /digest | DailyDigest | Daily digest with overdue/today/upcoming/this_week sections |
 | /timeline | Timeline | Activity timeline (configurable days) |
 | /settings | SettingsPage | AI provider config, theme toggle |
@@ -266,12 +275,21 @@ Live at: **https://ledger.hitchaser.com**
 - Auto-resolve notifications
 - Reconnects on auth
 
-## Meeting Mode
-- Two-column layout: left = context notes + history + meeting prep stats, right = open items + inline capture
-- Meeting prep stats: days since last meeting, new items, resolved items, open count
-- End meeting → AI summary generated → saved as ProfileLog
+## Meetings (First-Class Entity)
+- **Meetings tab** in sidebar — lists all meetings reverse chronological, with attendee avatars, project badges, active indicators
+- **New Meeting button** — zero friction, creates meeting and drops into notes textarea immediately
+- **Meeting Detail page** (/meetings/:id) — notes-first design:
+  - Header: editable title, End Meeting button, collapsible metadata toggle
+  - Metadata: attendees (PersonTypeahead), project link, prep stats — starts collapsed for quick-start, expanded when pre-populated
+  - Notes: large textarea, auto-saves with 500ms debounce, bullet-point formatting (- or * continuation on Enter)
+  - Capture section: inline item creation linked to attendees + project, open items list
+- **Read-only view** for ended meetings: formatted notes, attendees, summary
+- **Start Meeting from Person/Project**: creates meeting pre-populated with title + attendee/project, navigates to /meetings/:id
+- **Meeting history** shown on PersonProfile and ProjectCard pages
+- **Search integration**: meeting titles and notes searchable via universal search
+- Multi-attendee support via MeetingAttendee junction table
+- End meeting generates summary including notes context, creates ProfileLog per attendee + project
 - One active session at a time (409 on conflict)
-- Sidebar hidden during meeting
 
 ## Archive/Restore/Delete Flow
 - **People:** archive (is_archived=true) → can restore (is_archived=false) → delete (must be archived first, removes junction links and logs)
@@ -324,7 +342,9 @@ frontend/
       Feed.jsx         — Main item feed with filters and digest banner
       ItemCard.jsx     — Item display (pin, due date, notes, predecessors, editable text, badges)
       Login.jsx        — Login page (glass theme)
-      MeetingMode.jsx  — Two-column meeting view with prep stats
+      MeetingDetail.jsx — Notes-first meeting view (active + read-only ended)
+      MeetingMode.jsx  — Legacy redirect: creates meeting → navigates to /meetings/:id
+      MeetingsList.jsx — Meeting list page with new meeting button
       MentionDropdown.jsx — Autocomplete dropdown for @mentions and #hashtags
       PeopleDirectory.jsx — People list with search and archive toggle
       PersonProfile.jsx — Person detail (structured profile, avatar, items, logs, projects)

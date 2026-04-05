@@ -5,7 +5,7 @@ import ItemCard from './ItemCard';
 import DraggableItemList from './DraggableItemList';
 import AvatarUpload from './AvatarUpload';
 import PersonTypeahead from './PersonTypeahead';
-import { ArrowLeft, Play, Edit3, Save, Plus, Settings, X, Archive, ArchiveRestore, Trash2, FolderKanban, GitBranch, Merge } from 'lucide-react';
+import { ArrowLeft, Play, Edit3, Save, Plus, Settings, X, Archive, ArchiveRestore, Trash2, FolderKanban, GitBranch, Merge, Calendar } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 const DEFAULT_PROFILE = {
@@ -48,6 +48,7 @@ export default function PersonProfile({ refreshKey, onRefresh, itemUpdate }) {
   const [quickNote, setQuickNote] = useState('');
   const [availableProjects, setAvailableProjects] = useState([]);
   const [showAddProject, setShowAddProject] = useState(false);
+  const [pastMeetings, setPastMeetings] = useState([]);
 
   useEffect(() => {
     api.getPerson(id).then(p => {
@@ -60,6 +61,7 @@ export default function PersonProfile({ refreshKey, onRefresh, itemUpdate }) {
     api.getPersonLogs(id).then(setLogs);
     api.listPeople({ limit: 5000 }).then(r => setAllPeople(r.people || r));
     api.listProjects().then(setAvailableProjects);
+    api.listMeetings({ person_id: id, limit: 10 }).then(r => setPastMeetings(r.meetings || [])).catch(() => {});
   }, [id, refreshKey]);
 
   // Merge WebSocket item updates into local state
@@ -110,14 +112,22 @@ export default function PersonProfile({ refreshKey, onRefresh, itemUpdate }) {
 
   const startMeeting = async () => {
     try {
-      await api.startMeeting({ person_id: id });
-      navigate(`/meeting/person/${id}`);
+      const session = await api.startMeeting({
+        title: `Meeting with ${person.display_name}`,
+        person_id: id,
+        attendee_ids: [id],
+      });
+      navigate(`/meetings/${session.id}`);
     } catch (e) {
       if (e.message.includes('409')) {
         if (confirm('There is an active meeting session. End it and start a new one?')) {
           await api.forceEndActiveMeeting();
-          await api.startMeeting({ person_id: id });
-          navigate(`/meeting/person/${id}`);
+          const session = await api.startMeeting({
+            title: `Meeting with ${person.display_name}`,
+            person_id: id,
+            attendee_ids: [id],
+          });
+          navigate(`/meetings/${session.id}`);
         }
       } else {
         alert(e.message);
@@ -392,6 +402,26 @@ export default function PersonProfile({ refreshKey, onRefresh, itemUpdate }) {
           </div>
         )}
       </div>
+
+      {/* Meeting History */}
+      {pastMeetings.length > 0 && (
+        <div className="mb-4 p-3 glass rounded-lg">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs text-zinc-500 font-medium uppercase tracking-wide flex items-center gap-1"><Calendar size={12} /> Recent Meetings</span>
+            <button onClick={() => navigate('/meetings')} className="text-xs text-zinc-600 hover:text-zinc-300 transition-colors">View All</button>
+          </div>
+          <div className="flex flex-col gap-1">
+            {pastMeetings.slice(0, 5).map(m => (
+              <button key={m.id} onClick={() => navigate(`/meetings/${m.id}`)}
+                className="w-full flex items-center gap-2 px-2 py-1.5 rounded hover:bg-white/[0.04] transition-colors text-left">
+                <span className="text-sm text-zinc-300 truncate flex-1">{m.title || 'Untitled Meeting'}</span>
+                <span className="text-xs text-zinc-600 flex-shrink-0">{new Date(m.started_at).toLocaleDateString()}</span>
+                {!m.ended_at && <span className="text-xs text-emerald-400">Active</span>}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="flex gap-4 border-b border-white/[0.06] mb-3">
         <button onClick={() => setTab('items')}

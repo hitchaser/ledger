@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import or_
 
 from database import get_db
-from models import CaptureItem, Person, Project, ItemNote
+from models import CaptureItem, Person, Project, ItemNote, MeetingSession
 
 router = APIRouter(prefix="/api/search", tags=["search"])
 
@@ -11,7 +11,7 @@ router = APIRouter(prefix="/api/search", tags=["search"])
 @router.get("")
 def universal_search(q: str = Query(""), db: Session = Depends(get_db)):
     if not q or len(q.strip()) < 2:
-        return {"people": [], "projects": [], "items": []}
+        return {"people": [], "projects": [], "items": [], "meetings": []}
 
     query = q.strip().lower()
     ql = f"%{query}%"
@@ -79,4 +79,32 @@ def universal_search(q: str = Query(""), db: Session = Depends(get_db)):
             "linked_projects": [{"id": p.id, "name": p.name, "short_code": p.short_code} for p in item.linked_projects],
         })
 
-    return {"people": people, "projects": projects, "items": items[:20]}
+    # Search meetings — title and notes
+    meetings_q = db.query(MeetingSession).filter(
+        or_(
+            MeetingSession.title.ilike(ql),
+            MeetingSession.notes.ilike(ql),
+        )
+    ).order_by(MeetingSession.started_at.desc()).limit(8).all()
+
+    meetings = []
+    for m in meetings_q:
+        attendee_names = [p.display_name for p in (m.attendees or [])]
+        matching_notes = None
+        if m.notes and query in m.notes.lower():
+            # Extract a snippet around the match
+            idx = m.notes.lower().index(query)
+            start = max(0, idx - 30)
+            end = min(len(m.notes), idx + len(query) + 50)
+            matching_notes = ("..." if start > 0 else "") + m.notes[start:end] + ("..." if end < len(m.notes) else "")
+        meetings.append({
+            "id": str(m.id),
+            "title": m.title,
+            "started_at": m.started_at.isoformat(),
+            "ended_at": m.ended_at.isoformat() if m.ended_at else None,
+            "attendees": attendee_names,
+            "project_name": m.project.name if m.project else None,
+            "matching_notes": matching_notes,
+        })
+
+    return {"people": people, "projects": projects, "items": items[:20], "meetings": meetings}

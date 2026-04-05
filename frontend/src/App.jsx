@@ -11,6 +11,8 @@ import PersonProfile from './components/PersonProfile';
 import ProjectDirectory from './components/ProjectDirectory';
 import ProjectCard from './components/ProjectCard';
 import MeetingMode from './components/MeetingMode';
+import MeetingsList from './components/MeetingsList';
+import MeetingDetail from './components/MeetingDetail';
 import DailyDigest from './components/DailyDigest';
 import SettingsPage from './components/SettingsPage';
 import ImportExport from './components/ImportExport';
@@ -101,7 +103,7 @@ export default function App() {
     return <Login onLogin={() => setAuthenticated(true)} />;
   }
 
-  const isMeeting = location.pathname.startsWith('/meeting');
+  const isMeeting = location.pathname.startsWith('/meeting/');  // old meeting mode route only
 
   return (
     <div className="flex h-screen overflow-hidden">
@@ -117,6 +119,8 @@ export default function App() {
             <Route path="/people/:id" element={<PersonProfile refreshKey={refreshKey} onRefresh={refresh} itemUpdate={itemUpdate} />} />
             <Route path="/projects" element={<ProjectDirectory refreshKey={refreshKey} />} />
             <Route path="/projects/:id" element={<ProjectCard refreshKey={refreshKey} onRefresh={refresh} itemUpdate={itemUpdate} />} />
+            <Route path="/meetings" element={<MeetingsList />} />
+            <Route path="/meetings/:id" element={<MeetingDetail refreshKey={refreshKey} onRefresh={refresh} itemUpdate={itemUpdate} />} />
             <Route path="/meeting/:type/:id" element={<MeetingMode refreshKey={refreshKey} onRefresh={refresh} itemUpdate={itemUpdate} />} />
             <Route path="/digest" element={<DailyDigest />} />
             <Route path="/timeline" element={<Timeline />} />

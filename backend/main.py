@@ -11,7 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.responses import FileResponse, JSONResponse
 
 from database import engine, SessionLocal, Base
-from models import AIJob, CaptureItem, Person, Project, CaptureItemPerson, CaptureItemProject, LinkSource
+from models import AIJob, CaptureItem, Person, Project, CaptureItemPerson, CaptureItemProject, LinkSource, MeetingAttendee
 from services.ai_service import classify_capture, get_confidence_auto_resolve, get_confidence_suggest
 
 logging.basicConfig(level=logging.INFO)
@@ -93,6 +93,36 @@ if "profile" not in _people_cols:
     _db.commit()
     _db.close()
     logger.info("Migrated people table: added profile column")
+
+# Migration: MeetingSession title + notes columns, meeting_attendees junction table
+_meeting_cols = [c["name"] for c in _insp.get_columns("meeting_sessions")]
+for col_name, col_def in [("title", "TEXT"), ("notes", "TEXT")]:
+    if col_name not in _meeting_cols:
+        with engine.begin() as conn:
+            conn.execute(sa_text(f"ALTER TABLE meeting_sessions ADD COLUMN {col_name} {col_def}"))
+        logger.info(f"Migrated meeting_sessions: added {col_name}")
+
+if "meeting_attendees" not in _insp.get_table_names():
+    with engine.begin() as conn:
+        conn.execute(sa_text("""
+            CREATE TABLE meeting_attendees (
+                meeting_id UUID REFERENCES meeting_sessions(id) ON DELETE CASCADE,
+                person_id UUID REFERENCES people(id) ON DELETE CASCADE,
+                PRIMARY KEY (meeting_id, person_id)
+            )
+        """))
+    logger.info("Created meeting_attendees table")
+
+    # Migrate existing person_id data to meeting_attendees junction table
+    _db = SessionLocal()
+    from models import MeetingSession as _MS, MeetingAttendee as _MA
+    for _m in _db.query(_MS).filter(_MS.person_id != None).all():
+        _db.execute(sa_text(
+            "INSERT INTO meeting_attendees (meeting_id, person_id) VALUES (:mid, :pid) ON CONFLICT DO NOTHING"
+        ), {"mid": _m.id, "pid": _m.person_id})
+    _db.commit()
+    _db.close()
+    logger.info("Migrated person_id data to meeting_attendees")
 
 
 # ── WebSocket Manager ──

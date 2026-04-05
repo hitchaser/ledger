@@ -62,9 +62,17 @@ export const api = {
   unlinkProjectPerson: (projectId, personId) => request(`/projects/${projectId}/people/${personId}`, { method: 'DELETE' }),
 
   // Meetings
+  listMeetings: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return request(`/meetings${qs ? '?' + qs : ''}`);
+  },
   startMeeting: (data) => request('/meetings', { method: 'POST', body: JSON.stringify(data) }),
+  getMeeting: (id) => request(`/meetings/${id}`),
+  updateMeeting: (id, data) => request(`/meetings/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   endMeeting: (id) => request(`/meetings/${id}/end`, { method: 'PATCH' }),
   getActiveMeeting: () => request('/meetings/active'),
+  addMeetingAttendee: (meetingId, personId) => request(`/meetings/${meetingId}/attendees/${personId}`, { method: 'POST' }),
+  removeMeetingAttendee: (meetingId, personId) => request(`/meetings/${meetingId}/attendees/${personId}`, { method: 'DELETE' }),
   forceEndActiveMeeting: async () => {
     const active = await request('/meetings/active');
     if (active && active.id) {

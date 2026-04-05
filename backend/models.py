@@ -91,6 +91,12 @@ class CaptureItemProject(Base):
     link_source = Column(Enum(LinkSource), default=LinkSource.ai)
 
 
+class MeetingAttendee(Base):
+    __tablename__ = "meeting_attendees"
+    meeting_id = Column(UUID(as_uuid=True), ForeignKey("meeting_sessions.id", ondelete="CASCADE"), primary_key=True)
+    person_id = Column(UUID(as_uuid=True), ForeignKey("people.id", ondelete="CASCADE"), primary_key=True)
+
+
 # ── Core Models ──
 
 class CaptureItem(Base):
@@ -193,6 +199,8 @@ class MeetingSession(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     started_at = Column(DateTime(timezone=True), default=utcnow)
     ended_at = Column(DateTime(timezone=True), nullable=True)
+    title = Column(Text, nullable=True)
+    notes = Column(Text, nullable=True)
     person_id = Column(UUID(as_uuid=True), ForeignKey("people.id"), nullable=True)
     project_id = Column(UUID(as_uuid=True), ForeignKey("projects.id"), nullable=True)
     items_resolved = Column(Integer, default=0)
@@ -201,6 +209,7 @@ class MeetingSession(Base):
 
     person = relationship("Person", foreign_keys=[person_id])
     project = relationship("Project", foreign_keys=[project_id])
+    attendees = relationship("Person", secondary="meeting_attendees", backref="attended_meetings")
     capture_items = relationship("CaptureItem", backref="meeting_session")
 
 

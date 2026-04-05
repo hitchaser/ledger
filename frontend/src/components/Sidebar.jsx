@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { LayoutList, Users, FolderKanban, CalendarDays, Clock, GitBranch, ArrowUpDown, Settings, PanelLeftClose, PanelLeft, LogOut, Menu, X } from 'lucide-react';
+import { LayoutList, Users, FolderKanban, CalendarDays, Clock, GitBranch, ArrowUpDown, Settings, PanelLeftClose, PanelLeft, LogOut, Menu, X, Calendar } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 
@@ -7,6 +7,7 @@ const links = [
   { to: '/', icon: LayoutList, label: 'Feed' },
   { to: '/people', icon: Users, label: 'People' },
   { to: '/projects', icon: FolderKanban, label: 'Projects' },
+  { to: '/meetings', icon: Calendar, label: 'Meetings' },
   { to: '/digest', icon: CalendarDays, label: 'Digest' },
   { to: '/timeline', icon: Clock, label: 'Timeline' },
   { to: '/org-chart', icon: GitBranch, label: 'Org Chart' },

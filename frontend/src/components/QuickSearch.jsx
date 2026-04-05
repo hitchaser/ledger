@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
-import { Search, X, CheckCircle, Circle, MessageSquare, User, FolderKanban } from 'lucide-react';
+import { Search, X, CheckCircle, Circle, MessageSquare, User, FolderKanban, Calendar } from 'lucide-react';
 import Avatar from './Avatar';
 
 const TYPE_COLORS = {
@@ -15,7 +15,7 @@ const TYPE_COLORS = {
 
 export default function QuickSearch({ onClose }) {
   const [query, setQuery] = useState('');
-  const [results, setResults] = useState({ people: [], projects: [], items: [] });
+  const [results, setResults] = useState({ people: [], projects: [], items: [], meetings: [] });
   const [loading, setLoading] = useState(false);
   const inputRef = useRef(null);
   const navigate = useNavigate();
@@ -24,7 +24,7 @@ export default function QuickSearch({ onClose }) {
 
   useEffect(() => {
     if (!query.trim() || query.trim().length < 2) {
-      setResults({ people: [], projects: [], items: [] });
+      setResults({ people: [], projects: [], items: [], meetings: [] });
       return;
     }
     setLoading(true);
@@ -40,7 +40,7 @@ export default function QuickSearch({ onClose }) {
 
   const go = (path) => { navigate(path); onClose(); };
 
-  const hasResults = results.people.length > 0 || results.projects.length > 0 || results.items.length > 0;
+  const hasResults = results.people.length > 0 || results.projects.length > 0 || results.items.length > 0 || results.meetings?.length > 0;
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-start justify-center pt-[12vh] z-50 px-4" onClick={onClose}>
@@ -91,6 +91,37 @@ export default function QuickSearch({ onClose }) {
                   <span className="font-medium">{p.name}</span>
                   {p.short_code && <span className="text-xs text-zinc-600">[{p.short_code}]</span>}
                   <span className={`text-xs ml-auto ${p.is_archived ? 'text-zinc-700' : 'text-zinc-600'}`}>{p.is_archived ? 'archived' : p.status}</span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Meetings */}
+          {results.meetings?.length > 0 && (
+            <div className="mb-2">
+              <div className="flex items-center gap-1.5 px-2 py-1">
+                <Calendar size={12} className="text-emerald-400" />
+                <span className="text-xs text-zinc-500 font-medium uppercase tracking-wide">Meetings</span>
+              </div>
+              {results.meetings.map(m => (
+                <button key={m.id} onClick={() => go(`/meetings/${m.id}`)}
+                  className="w-full text-left px-3 py-2 rounded hover:bg-white/[0.05] transition-colors">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-zinc-300 font-medium">{m.title || 'Untitled Meeting'}</span>
+                    <span className="text-xs text-zinc-600">{new Date(m.started_at).toLocaleDateString()}</span>
+                    {m.attendees?.length > 0 && (
+                      <span className="text-xs text-indigo-400/60">{m.attendees.join(', ')}</span>
+                    )}
+                    {m.project_name && (
+                      <span className="text-xs text-cyan-400/60">{m.project_name}</span>
+                    )}
+                  </div>
+                  {m.matching_notes && (
+                    <div className="flex items-center gap-1 mt-0.5">
+                      <MessageSquare size={10} className="text-zinc-600" />
+                      <span className="text-xs text-zinc-500 italic">{m.matching_notes}</span>
+                    </div>
+                  )}
                 </button>
               ))}
             </div>

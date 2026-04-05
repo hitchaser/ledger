@@ -141,18 +141,29 @@ class ProjectResponse(BaseModel):
 # ── Meeting ──
 
 class MeetingCreate(BaseModel):
+    title: Optional[str] = None
     person_id: Optional[UUID] = None
     project_id: Optional[UUID] = None
+    attendee_ids: List[UUID] = []
+
+class MeetingUpdate(BaseModel):
+    title: Optional[str] = None
+    notes: Optional[str] = None
+    project_id: Optional[str] = None  # string to allow "" for clearing
 
 class MeetingResponse(BaseModel):
     id: UUID
     started_at: datetime
     ended_at: Optional[datetime] = None
+    title: Optional[str] = None
+    notes: Optional[str] = None
     person_id: Optional[UUID] = None
     project_id: Optional[UUID] = None
     items_resolved: int
     items_added: int
     ai_summary: Optional[str] = None
+    attendees: List[PersonRef] = []
+    project: Optional[ProjectRef] = None
 
     class Config:
         from_attributes = True
