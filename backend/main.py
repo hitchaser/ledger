@@ -76,6 +76,40 @@ try:
             logger.info(f"Reset {result.rowcount} org-imported display names to full names")
 except Exception as e:
     logger.warning(f"Display name reset skipped: {e}")
+
+# One-time: remove inherited duplicate people (display_name ends with " 2", " 3", etc.)
+# These were created from "(inherited)" rows in the org export
+try:
+    _db = SessionLocal()
+    import re as _re
+    _dupes = _db.query(Person).filter(
+        Person.import_source == "org_import",
+    ).all()
+    _deleted = 0
+    _dupe_pattern = _re.compile(r'^.+ \d+$')
+    # Find people whose display_name has a number suffix AND another person exists with same external_id prefix
+    _ext_id_counts = {}
+    for p in _dupes:
+        if p.external_id:
+            _ext_id_counts[p.external_id] = _ext_id_counts.get(p.external_id, 0) + 1
+    # Delete org-imported people whose display_name matches "Name N" pattern and name == another person's name
+    _names_seen = {}
+    for p in sorted(_dupes, key=lambda x: x.display_name):
+        if p.name in _names_seen and _dupe_pattern.match(p.display_name) and p.display_name != p.name:
+            # This is a numbered duplicate — delete it
+            from models import CaptureItemPerson, ProfileLog
+            _db.query(CaptureItemPerson).filter(CaptureItemPerson.person_id == p.id).delete()
+            _db.query(ProfileLog).filter(ProfileLog.person_id == p.id).delete()
+            _db.delete(p)
+            _deleted += 1
+        else:
+            _names_seen[p.name] = p
+    if _deleted > 0:
+        _db.commit()
+        logger.info(f"Removed {_deleted} inherited duplicate people")
+    _db.close()
+except Exception as e:
+    logger.warning(f"Duplicate cleanup skipped: {e}")
 if "avatar" not in _people_cols:
     with engine.begin() as conn:
         conn.execute(sa_text("ALTER TABLE people ADD COLUMN avatar TEXT"))

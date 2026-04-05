@@ -240,15 +240,25 @@ def _generate_unique_display_name(full_name: str, taken_names: set) -> str:
 
 
 def _parse_org_xlsx(rows: list) -> list:
-    """Normalize org XLSX rows using column name mapping."""
+    """Normalize org XLSX rows using column name mapping. Skips inherited duplicates."""
     result = []
+    seen_ext_ids = set()
     for row in rows:
         mapped = {}
         for col_name, value in row.items():
             key = ORG_COL_MAP.get(col_name.strip().lower(), col_name.strip().lower())
             mapped[key] = (value or "").strip()
-        if mapped.get("external_id") and mapped.get("name"):
-            result.append(mapped)
+        if not mapped.get("external_id") or not mapped.get("name"):
+            continue
+        # Skip inherited duplicate rows
+        org_name = mapped.get("org_name", "").lower()
+        if "(inherited)" in org_name:
+            continue
+        # Skip if we already have this external_id (true duplicate row)
+        if mapped["external_id"] in seen_ext_ids:
+            continue
+        seen_ext_ids.add(mapped["external_id"])
+        result.append(mapped)
     return result
 
 
