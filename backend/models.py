@@ -156,7 +156,7 @@ class Person(Base):
     context_notes = Column(Text, default="")
     avatar = Column(Text, nullable=True)  # base64 data URL
     manager_id = Column(UUID(as_uuid=True), ForeignKey("people.id"), nullable=True)
-    external_id = Column(String, nullable=True, index=True)  # org system unique identifier
+    external_id = Column(String, nullable=True)  # per-import reference ID (not stable across exports)
     import_source = Column(String, nullable=True)  # "org_import" or null for manual
     profile = Column(JSON, default=lambda: {
         "spouse": "", "anniversary": "", "children": [],
