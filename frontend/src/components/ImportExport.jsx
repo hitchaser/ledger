@@ -185,6 +185,20 @@ export default function ImportExport() {
               </div>
             )}
 
+            {orgPreview.review?.length > 0 && (
+              <div className="mb-2">
+                <span className="text-xs text-pink-400 font-medium">Needs Review ({orgPreview.review.length}):</span>
+                <div className="max-h-32 overflow-y-auto mt-1">
+                  {orgPreview.review.map((r, i) => (
+                    <div key={i} className="text-xs text-zinc-400 py-0.5 flex items-start gap-1">
+                      <AlertTriangle size={10} className="text-pink-400 mt-0.5 flex-shrink-0" />
+                      <span><strong>{r.name}</strong>: {r.reason}{r.old_manager && r.new_manager ? ` (${r.old_manager} → ${r.new_manager})` : ''}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="flex gap-2 mt-3">
               <button onClick={handleOrgCommit} disabled={orgImporting}
                 className="flex items-center gap-1.5 bg-violet-600/80 hover:bg-violet-500 text-white text-sm px-4 py-2 rounded-lg border border-violet-500/20 transition-all disabled:opacity-40">

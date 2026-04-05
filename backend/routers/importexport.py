@@ -275,9 +275,78 @@ def _parse_org_xlsx(rows: list) -> tuple:
     return primary, alias_map
 
 
+def _resolve_file_managers(org_rows, alias_map):
+    """Build a map of file ext_id → manager's name (resolved within the file).
+    Used for name+manager composite matching."""
+    ext_to_name = {r["external_id"]: r["name"].strip().lower() for r in org_rows}
+    # Also add alias targets
+    for alias_id, primary_id in alias_map.items():
+        if primary_id in ext_to_name:
+            ext_to_name[alias_id] = ext_to_name[primary_id]
+
+    result = {}  # ext_id → manager_name (lowercase)
+    for r in org_rows:
+        reports_to = r.get("reports_to", "").strip()
+        if reports_to:
+            resolved = alias_map.get(reports_to, reports_to)
+            result[r["external_id"]] = ext_to_name.get(resolved, "")
+        else:
+            result[r["external_id"]] = ""
+    return result
+
+
+def _build_db_name_manager_map(db):
+    """Build lookup of (name_lower, manager_name_lower) → Person for org-imported people."""
+    people = db.query(Person).filter(Person.import_source == "org_import").all()
+    manager_ids = {p.manager_id for p in people if p.manager_id}
+    managers = {p.id: p.name.lower().strip() for p in db.query(Person).filter(Person.id.in_(manager_ids)).all()} if manager_ids else {}
+
+    by_name_mgr = {}  # (name_lower, mgr_name_lower) → Person
+    by_name = {}  # name_lower → [Person, ...]
+    for p in people:
+        name_l = p.name.lower().strip()
+        mgr_name = managers.get(p.manager_id, "") if p.manager_id else ""
+        by_name_mgr[(name_l, mgr_name)] = p
+        by_name.setdefault(name_l, []).append(p)
+    return by_name_mgr, by_name
+
+
+def _get_subtree_names(db, root_names: set) -> set:
+    """Get all names currently under the given root names in the DB. BFS tree walk."""
+    if not root_names:
+        return set()
+    all_people = db.query(Person).filter(Person.import_source == "org_import", Person.is_archived == False).all()
+    name_to_id = {}
+    id_to_name = {}
+    children_map = {}
+    for p in all_people:
+        name_to_id.setdefault(p.name.lower().strip(), []).append(p.id)
+        id_to_name[p.id] = p.name.lower().strip()
+        if p.manager_id:
+            children_map.setdefault(p.manager_id, []).append(p.id)
+
+    root_ids = set()
+    for rn in root_names:
+        root_ids.update(name_to_id.get(rn, []))
+
+    result_names = set()
+    queue = list(root_ids)
+    seen = set()
+    while queue:
+        current = queue.pop(0)
+        if current in seen:
+            continue
+        seen.add(current)
+        n = id_to_name.get(current)
+        if n:
+            result_names.add(n)
+        queue.extend(children_map.get(current, []))
+    return result_names
+
+
 @router.post("/org-preview")
 async def org_preview(file: UploadFile = File(...), db: Session = Depends(get_db)):
-    """Preview org chart XLSX import — shows creates, updates, archives."""
+    """Preview org chart XLSX import — name+manager matching with review flags."""
     content = await file.read()
     rows = _parse_file(file.filename, content)
     if not rows:
@@ -285,71 +354,113 @@ async def org_preview(file: UploadFile = File(...), db: Session = Depends(get_db
 
     org_rows, alias_map = _parse_org_xlsx(rows)
     if not org_rows:
-        raise HTTPException(400, "No valid rows found. Expected columns: Unique Identifier, Name, Reports To, Line Detail 1, Line Detail 2, Organization Name")
+        raise HTTPException(400, "No valid rows found. Expected columns: Unique Identifier, Name, Reports To, etc.")
 
-    # Load existing people with external_ids
-    existing_by_ext = {p.external_id: p for p in db.query(Person).filter(Person.external_id != None).all()}
-    imported_ext_ids = {r["external_id"] for r in org_rows}
-    # Include aliased IDs as "present" so inherited people don't get archived
-    imported_ext_ids.update(alias_map.keys())
+    # Resolve manager names within the file
+    file_mgr_map = _resolve_file_managers(org_rows, alias_map)
+
+    # Build DB lookup by (name, manager_name)
+    by_name_mgr, by_name = _build_db_name_manager_map(db)
 
     creates = []
     updates = []
     unchanged = 0
     archives = []
-    errors = []
+    review = []  # ambiguous cases for user review
+    file_names = set()  # track all names in file for archive detection
 
     for r in org_rows:
         ext_id = r["external_id"]
-        name = r.get("name", "")
+        name = r.get("name", "").strip()
+        name_l = name.lower()
         role = r.get("role", "")
         location = r.get("location", "")
-        reports_to = r.get("reports_to", "")
         org_name = r.get("org_name", "")
         is_leader = bool(org_name)
+        file_mgr_name = file_mgr_map.get(ext_id, "")
+        file_names.add(name_l)
 
-        person = existing_by_ext.get(ext_id)
+        # Priority 1: exact name + manager match
+        person = by_name_mgr.get((name_l, file_mgr_name))
+
         if person:
-            # Check what would change
+            # Confident match — check for field changes
             changes = {}
-            if name and name != person.name:
-                changes["name"] = {"from": person.name, "to": name}
             if role and role != (person.role or ""):
                 changes["role"] = {"from": person.role or "", "to": role}
             profile = person.profile or {}
             if location and location != profile.get("location", ""):
                 changes["location"] = {"from": profile.get("location", ""), "to": location}
             if changes:
-                updates.append({"external_id": ext_id, "name": name, "changes": changes, "is_leader": is_leader})
+                updates.append({"name": name, "display_name": person.display_name, "changes": changes, "match": "name+manager"})
             else:
                 unchanged += 1
+        elif name_l in by_name:
+            # Name exists but manager is different — could be manager change or different person
+            existing = by_name[name_l]
+            if len(existing) == 1:
+                # Only one person with this name — likely a manager change
+                p = existing[0]
+                old_mgr = ""
+                if p.manager_id and p.manager:
+                    old_mgr = p.manager.name
+                review.append({
+                    "name": name,
+                    "display_name": p.display_name,
+                    "old_manager": old_mgr,
+                    "new_manager": file_mgr_name,
+                    "reason": "Manager changed — will update",
+                })
+                # Still count as update
+                changes = {}
+                if role and role != (p.role or ""):
+                    changes["role"] = {"from": p.role or "", "to": role}
+                profile = p.profile or {}
+                if location and location != profile.get("location", ""):
+                    changes["location"] = {"from": profile.get("location", ""), "to": location}
+                changes["manager"] = {"from": old_mgr, "to": file_mgr_name}
+                updates.append({"name": name, "display_name": p.display_name, "changes": changes, "match": "name_only"})
+            else:
+                # Multiple people with this name — ambiguous
+                review.append({
+                    "name": name,
+                    "display_name": None,
+                    "old_manager": ", ".join(p.display_name for p in existing),
+                    "new_manager": file_mgr_name,
+                    "reason": f"Multiple '{name}' exist — cannot auto-match, will create new",
+                })
+                creates.append({"name": name, "role": role, "location": location, "is_leader": is_leader})
         else:
-            creates.append({"external_id": ext_id, "name": name, "role": role, "location": location, "is_leader": is_leader})
+            creates.append({"name": name, "role": role, "location": location, "is_leader": is_leader})
 
-    # Scope archive to the import's subtree only
-    import_roots = _find_import_roots(org_rows)
-    subtree_ext_ids = _get_subtree_ext_ids(db, import_roots)
+    # Scope archive to the import's subtree
+    root_names = set()
+    for r in org_rows:
+        reports_to = r.get("reports_to", "").strip()
+        if not reports_to or alias_map.get(reports_to, reports_to) not in {rr["external_id"] for rr in org_rows}:
+            root_names.add(r["name"].strip().lower())
+    subtree_names = _get_subtree_names(db, root_names)
 
-    # Departed = in the subtree but not in the new import
-    for ext_id in subtree_ext_ids:
-        if ext_id not in imported_ext_ids:
-            person = existing_by_ext.get(ext_id)
-            if person and not person.is_archived:
-                archives.append({"external_id": ext_id, "name": person.name, "display_name": person.display_name})
+    for sn in subtree_names:
+        if sn not in file_names:
+            people = by_name.get(sn, [])
+            for p in people:
+                if not p.is_archived:
+                    archives.append({"name": p.name, "display_name": p.display_name})
 
     return {
         "creates": creates,
         "updates": updates,
         "archives": archives,
+        "review": review,
         "unchanged_count": unchanged,
-        "errors": errors,
         "total_rows": len(org_rows),
     }
 
 
 @router.post("/org-commit")
 async def org_commit(file: UploadFile = File(...), db: Session = Depends(get_db)):
-    """Commit org chart XLSX import — creates, updates, archives people."""
+    """Commit org chart XLSX import — name+manager matching."""
     content = await file.read()
     rows = _parse_file(file.filename, content)
     if not rows:
@@ -359,38 +470,47 @@ async def org_commit(file: UploadFile = File(...), db: Session = Depends(get_db)
     if not org_rows:
         raise HTTPException(400, "No valid org rows found")
 
-    existing_by_ext = {p.external_id: p for p in db.query(Person).filter(Person.external_id != None).all()}
-    imported_ext_ids = {r["external_id"] for r in org_rows}
-    imported_ext_ids.update(alias_map.keys())  # inherited IDs count as present
+    # Resolve manager names within the file
+    file_mgr_map = _resolve_file_managers(org_rows, alias_map)
+
+    # Build DB lookups
+    by_name_mgr, by_name = _build_db_name_manager_map(db)
+
+    all_people = db.query(Person).all()
+    taken_display_names = {p.display_name.lower() for p in all_people}
+
     created_count = 0
     updated_count = 0
     archived_count = 0
     errors = []
+    file_names = set()
 
-    # Build set of all taken display names (for uniqueness)
-    all_people = db.query(Person).all()
-    taken_display_names = {p.display_name.lower() for p in all_people}
+    # Map file ext_id → Person (for manager resolution within file)
+    ext_to_person = {}
 
-    # Pass 1: Create/update all people (without manager links)
-    ext_to_person = dict(existing_by_ext)  # ext_id → Person
-
+    # Pass 1: Match and create/update people
     for r in org_rows:
         ext_id = r["external_id"]
         name = r.get("name", "").strip()
+        name_l = name.lower()
         role = r.get("role", "").strip()
         location = r.get("location", "").strip()
-        org_name = r.get("org_name", "").strip()
+        file_mgr_name = file_mgr_map.get(ext_id, "")
+        file_names.add(name_l)
 
-        person = ext_to_person.get(ext_id)
+        # Try name+manager match first, then name-only
+        person = by_name_mgr.get((name_l, file_mgr_name))
+        if not person and name_l in by_name:
+            candidates = by_name[name_l]
+            if len(candidates) == 1:
+                person = candidates[0]  # only one — accept as manager change
+
         if person:
-            # Update org fields only — preserve user-customized data
+            # Update existing
             old_name = person.name
             if name and name != old_name:
                 person.name = name
-                # Only update display_name if it wasn't customized
-                # "Not customized" = display_name equals old full name OR old auto-generated short name
                 if person.display_name == old_name:
-                    # Re-generate unique short display name for the new name
                     taken_display_names.discard(person.display_name.lower())
                     new_dn = _generate_unique_display_name(name, taken_display_names)
                     person.display_name = new_dn
@@ -405,79 +525,74 @@ async def org_commit(file: UploadFile = File(...), db: Session = Depends(get_db)
                 from sqlalchemy.orm.attributes import flag_modified
                 flag_modified(person, "profile")
             person.import_source = "org_import"
+            person.external_id = ext_id  # update to current file's ID
             if person.is_archived:
                 person.is_archived = False
+            ext_to_person[ext_id] = person
             updated_count += 1
         else:
-            # Create new person with unique short display name
+            # Create new
             display_name = _generate_unique_display_name(name, taken_display_names)
             taken_display_names.add(display_name.lower())
-
             profile = {
                 "spouse": "", "anniversary": "", "children": [],
                 "pets": [], "birthday": "", "hobbies": "",
                 "location": location, "address": "", "general": ""
             }
             person = Person(
-                name=name,
-                display_name=display_name,
-                role=role,
-                reporting_level=ReportingLevel.ic,
-                import_source="org_import",
-                external_id=ext_id,
-                profile=profile,
+                name=name, display_name=display_name, role=role,
+                reporting_level=ReportingLevel.ic, import_source="org_import",
+                external_id=ext_id, profile=profile,
             )
             db.add(person)
             db.flush()
             ext_to_person[ext_id] = person
             created_count += 1
 
-    # Pass 2: Resolve manager references via external_id (with alias resolution)
+    # Pass 2: Resolve manager references using file ext_ids (with alias resolution)
     for r in org_rows:
         ext_id = r["external_id"]
         reports_to = r.get("reports_to", "").strip()
         person = ext_to_person.get(ext_id)
         if person and reports_to:
-            # Resolve through alias map — inherited ext_id → primary ext_id
             resolved_to = alias_map.get(reports_to, reports_to)
             manager = ext_to_person.get(resolved_to)
             if manager:
                 person.manager_id = manager.id
             else:
-                errors.append(f"Manager ext_id '{reports_to}' not found for '{person.name}'")
+                errors.append(f"Manager not found for '{person.name}' (reports_to: {reports_to})")
         elif person and not reports_to:
             person.manager_id = None
 
-    # Pass 3: Archive departed — scoped to the import's subtree only
-    import_roots = _find_import_roots(org_rows)
-    subtree_ext_ids = _get_subtree_ext_ids(db, import_roots)
-    for ext_id in subtree_ext_ids:
-        if ext_id not in imported_ext_ids:
-            person = existing_by_ext.get(ext_id)
-            if person and not person.is_archived:
-                person.is_archived = True
-                archived_count += 1
+    # Pass 3: Archive departed — scoped to import subtree by name
+    root_names = set()
+    for r in org_rows:
+        reports_to = r.get("reports_to", "").strip()
+        if not reports_to or alias_map.get(reports_to, reports_to) not in {rr["external_id"] for rr in org_rows}:
+            root_names.add(r["name"].strip().lower())
+    subtree_names = _get_subtree_names(db, root_names)
+
+    for sn in subtree_names:
+        if sn not in file_names:
+            people_list = by_name.get(sn, [])
+            for p in people_list:
+                if not p.is_archived:
+                    p.is_archived = True
+                    archived_count += 1
 
     # Pass 4: Infer reporting_level from tree structure
-    # Anyone with direct reports is at least manager, top of tree is executive, rest is IC
     has_reports = set()
     for person in ext_to_person.values():
         if person.manager_id:
             has_reports.add(person.manager_id)
-
     for person in ext_to_person.values():
         if person.id in has_reports:
-            if not person.manager_id:
-                person.reporting_level = ReportingLevel.executive
-            else:
-                person.reporting_level = ReportingLevel.manager
+            person.reporting_level = ReportingLevel.executive if not person.manager_id else ReportingLevel.manager
         else:
             person.reporting_level = ReportingLevel.ic
 
-    # Pass 5: Fix display names — re-generate short unique names for imported people
-    # whose display_name still equals their full name (not yet customized)
+    # Pass 5: Fix display names for imported people whose display_name == name (not customized)
     taken_dn = set()
-    # First collect all customized display names (those that differ from full name)
     for person in ext_to_person.values():
         if person.display_name != person.name:
             taken_dn.add(person.display_name.lower())
