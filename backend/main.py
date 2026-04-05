@@ -77,47 +77,22 @@ try:
 except Exception as e:
     logger.warning(f"Display name reset skipped: {e}")
 
-# One-time: remove inherited duplicate people
-# These share the same name+external_id as another person (from "(inherited)" rows)
-# Keep the first, delete the rest
+# One-time: clean wipe of all org-imported people for fresh re-import
+# Manual people (no import_source) and their data are preserved
 try:
     _db = SessionLocal()
-    from models import ProfileLog as _ProfileLog
-    _org_people = _db.query(Person).filter(Person.import_source == "org_import").order_by(Person.created_at).all()
-    _seen_ext = {}  # external_id → first Person
-    _deleted = 0
-    for p in _org_people:
-        if p.external_id and p.external_id in _seen_ext:
-            # Duplicate external_id — delete this one
-            _db.query(CaptureItemPerson).filter(CaptureItemPerson.person_id == p.id).delete()
-            _db.query(_ProfileLog).filter(_ProfileLog.person_id == p.id).delete()
-            _db.delete(p)
-            _deleted += 1
-        elif p.external_id:
-            _seen_ext[p.external_id] = p
-    # Also remove people with same name where one has no items/profile data (true duplicates)
-    _seen_names = {}
-    _remaining = _db.query(Person).filter(Person.import_source == "org_import").order_by(Person.created_at).all()
-    for p in _remaining:
-        key = p.name.lower().strip()
-        if key in _seen_names:
-            # Same name, different external_id — check if one is a duplicate row
-            # Keep the earlier one, delete this if it has no items or profile customization
-            _has_items = _db.query(CaptureItemPerson).filter(CaptureItemPerson.person_id == p.id).count()
-            _profile = p.profile or {}
-            _has_profile = any(_profile.get(k) for k in ['spouse','birthday','hobbies','general','children','pets'] if _profile.get(k) and _profile.get(k) not in ['', []])
-            if not _has_items and not _has_profile:
-                _db.query(_ProfileLog).filter(_ProfileLog.person_id == p.id).delete()
-                _db.delete(p)
-                _deleted += 1
-                continue
-        _seen_names[key] = p
-    if _deleted > 0:
+    from models import ProfileLog as _ProfileLog, PersonProject as _PersonProject
+    _org_ids = [p.id for p in _db.query(Person).filter(Person.import_source == "org_import").all()]
+    if _org_ids:
+        _db.query(CaptureItemPerson).filter(CaptureItemPerson.person_id.in_(_org_ids)).delete(synchronize_session=False)
+        _db.query(_ProfileLog).filter(_ProfileLog.person_id.in_(_org_ids)).delete(synchronize_session=False)
+        _db.query(_PersonProject).filter(_PersonProject.person_id.in_(_org_ids)).delete(synchronize_session=False)
+        _db.query(Person).filter(Person.id.in_(_org_ids)).delete(synchronize_session=False)
         _db.commit()
-        logger.info(f"Removed {_deleted} inherited duplicate people")
+        logger.info(f"Clean wiped {len(_org_ids)} org-imported people for fresh re-import")
     _db.close()
 except Exception as e:
-    logger.warning(f"Duplicate cleanup skipped: {e}")
+    logger.warning(f"Org wipe skipped: {e}")
 if "avatar" not in _people_cols:
     with engine.begin() as conn:
         conn.execute(sa_text("ALTER TABLE people ADD COLUMN avatar TEXT"))
