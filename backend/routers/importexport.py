@@ -586,16 +586,17 @@ async def org_commit(file: UploadFile = File(...), db: Session = Depends(get_db)
                     archived_count += 1
 
     # Pass 4: Infer reporting_level from title + tree structure
-    _exec_keywords = ['evp', 'svp', 'vp ', 'vice president', 'chief', 'president', 'head of']
-    _director_keywords = ['director', 'sr director', 'senior director']
+    import re as _re
+    _exec_pattern = _re.compile(r'\b(evp|svp|vp|vice president|chief|president|head of)\b', _re.IGNORECASE)
+    _director_pattern = _re.compile(r'\b(sr\.?\s*director|senior\s+director|director)\b', _re.IGNORECASE)
     has_reports = set()
     for person in ext_to_person.values():
         if person.manager_id:
             has_reports.add(person.manager_id)
     for person in ext_to_person.values():
-        role_lower = (person.role or "").lower()
-        is_exec = any(kw in role_lower for kw in _exec_keywords)
-        is_director = any(kw in role_lower for kw in _director_keywords)
+        role_lower = (person.role or "")
+        is_exec = bool(_exec_pattern.search(role_lower))
+        is_director = bool(_director_pattern.search(role_lower))
         if is_exec:
             person.reporting_level = ReportingLevel.executive
         elif is_director:
