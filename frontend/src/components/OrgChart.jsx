@@ -43,7 +43,7 @@ function OrgRow({ node, depth, focusId, onToggle, onNavigate, onFocus, loadingId
         </div>
 
         <div className="flex items-center gap-1.5 flex-shrink-0">
-          {hasChildren && <span className="text-[10px] text-zinc-600" title={`${node.child_count} direct, ${node.org_count} total`}>{node.child_count}/{node.org_count}</span>}
+          {hasChildren && <span className="text-[10px] text-zinc-600" title={`${node.child_count} direct, ${node.org_count} total`}>{node.child_count === node.org_count ? node.org_count : `${node.child_count}/${node.org_count}`}</span>}
           {!isFocus && (
             <button onClick={() => onFocus(node.id)}
               className="text-[10px] text-zinc-700 hover:text-blue-400 opacity-0 group-hover:opacity-100 transition-all px-1">
