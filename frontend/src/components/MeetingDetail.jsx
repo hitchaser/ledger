@@ -7,7 +7,7 @@ import PersonTypeahead from './PersonTypeahead';
 import { useMentions } from '../hooks/useMentions';
 import MentionDropdown from './MentionDropdown';
 import Avatar from './Avatar';
-import { Square, Send, Copy, ChevronDown, ChevronUp, X, ArrowLeft, FolderKanban } from 'lucide-react';
+import { Square, Send, Copy, ChevronDown, ChevronUp, X, ArrowLeft, FolderKanban, Trash2 } from 'lucide-react';
 
 export default function MeetingDetail({ refreshKey, onRefresh, itemUpdate }) {
   const { id } = useParams();
@@ -22,6 +22,7 @@ export default function MeetingDetail({ refreshKey, onRefresh, itemUpdate }) {
   const [captureText, setCaptureText] = useState('');
   const [prep, setPrep] = useState(null);
   const [allProjects, setAllProjects] = useState([]);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const notesRef = useRef(null);
   const saveTimerRef = useRef(null);
   const captureInputRef = useRef(null);
@@ -146,6 +147,11 @@ export default function MeetingDetail({ refreshKey, onRefresh, itemUpdate }) {
     setCaptureText('');
     onRefresh?.();
     loadItems();
+  };
+
+  const deleteMeeting = async () => {
+    await api.deleteMeeting(id);
+    navigate('/meetings');
   };
 
   // Handle bullet-point formatting in notes
@@ -296,6 +302,10 @@ export default function MeetingDetail({ refreshKey, onRefresh, itemUpdate }) {
             {metaOpen ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
             {metaOpen ? 'Hide Details' : 'Details'}
           </button>
+          <button onClick={() => setConfirmDelete(true)}
+            className="text-zinc-700 hover:text-rose-400 transition-colors" title="Delete meeting">
+            <Trash2 size={14} />
+          </button>
         </div>
 
         {/* Metadata */}
@@ -330,6 +340,21 @@ export default function MeetingDetail({ refreshKey, onRefresh, itemUpdate }) {
             <div className="p-2 glass rounded text-sm text-zinc-400 whitespace-pre-wrap max-h-40 overflow-y-auto">{meeting.ai_summary}</div>
           </div>
         )}
+      {confirmDelete && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="glass rounded-xl max-w-sm w-full p-6 border-white/10 shadow-2xl shadow-black/40">
+            <h3 className="text-lg font-semibold text-zinc-100 mb-2">Delete this meeting?</h3>
+            <p className="text-sm text-zinc-400 mb-5">This will permanently remove the meeting, its notes, and summary. Captured items will be kept.</p>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setConfirmDelete(false)} className="text-xs text-zinc-500 px-3 py-1.5">Cancel</button>
+              <button onClick={deleteMeeting}
+                className="text-xs bg-rose-600/80 hover:bg-rose-500 text-white rounded px-3 py-1.5 border border-rose-500/20 transition-all">
+                Yes, delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       </div>
     );
   }
@@ -346,6 +371,10 @@ export default function MeetingDetail({ refreshKey, onRefresh, itemUpdate }) {
           className="text-xs text-zinc-600 hover:text-zinc-300 flex items-center gap-1 glass rounded px-2 py-1 transition-all">
           {metaOpen ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
           {metaOpen ? 'Hide Details' : 'Details'}
+        </button>
+        <button onClick={() => setConfirmDelete(true)}
+          className="text-zinc-700 hover:text-rose-400 transition-colors" title="Delete meeting">
+          <Trash2 size={14} />
         </button>
         <button onClick={endMeeting} disabled={ending}
           className="flex items-center gap-1.5 text-xs bg-rose-500/20 hover:bg-rose-500/30 text-rose-400 rounded px-3 py-1.5 border border-rose-500/20 disabled:opacity-40 transition-all">
@@ -397,6 +426,21 @@ export default function MeetingDetail({ refreshKey, onRefresh, itemUpdate }) {
           </div>
         )}
       </div>
+      {confirmDelete && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="glass rounded-xl max-w-sm w-full p-6 border-white/10 shadow-2xl shadow-black/40">
+            <h3 className="text-lg font-semibold text-zinc-100 mb-2">Delete this meeting?</h3>
+            <p className="text-sm text-zinc-400 mb-5">This will permanently remove the meeting, its notes, and summary. Captured items will be kept.</p>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setConfirmDelete(false)} className="text-xs text-zinc-500 px-3 py-1.5">Cancel</button>
+              <button onClick={deleteMeeting}
+                className="text-xs bg-rose-600/80 hover:bg-rose-500 text-white rounded px-3 py-1.5 border border-rose-500/20 transition-all">
+                Yes, delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

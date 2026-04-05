@@ -167,6 +167,21 @@ def update_meeting(meeting_id: UUID, body: MeetingUpdate, db: Session = Depends(
     return meeting_to_response(session)
 
 
+@router.delete("/{meeting_id}")
+def delete_meeting(meeting_id: UUID, db: Session = Depends(get_db)):
+    session = db.query(MeetingSession).filter(MeetingSession.id == meeting_id).first()
+    if not session:
+        raise HTTPException(404, "Not found")
+    # Delete attendees, profile logs, and unlink capture items
+    db.query(MeetingAttendee).filter_by(meeting_id=meeting_id).delete()
+    db.query(ProfileLog).filter_by(meeting_session_id=meeting_id).delete()
+    from models import CaptureItem
+    db.query(CaptureItem).filter_by(meeting_session_id=meeting_id).update({"meeting_session_id": None})
+    db.delete(session)
+    db.commit()
+    return {"ok": True}
+
+
 @router.post("/{meeting_id}/attendees/{person_id}")
 def add_attendee(meeting_id: UUID, person_id: UUID, db: Session = Depends(get_db)):
     session = db.query(MeetingSession).filter(MeetingSession.id == meeting_id).first()

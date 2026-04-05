@@ -70,6 +70,7 @@ export const api = {
   getMeeting: (id) => request(`/meetings/${id}`),
   updateMeeting: (id, data) => request(`/meetings/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   endMeeting: (id) => request(`/meetings/${id}/end`, { method: 'PATCH' }),
+  deleteMeeting: (id) => request(`/meetings/${id}`, { method: 'DELETE' }),
   getActiveMeeting: () => request('/meetings/active'),
   addMeetingAttendee: (meetingId, personId) => request(`/meetings/${meetingId}/attendees/${personId}`, { method: 'POST' }),
   removeMeetingAttendee: (meetingId, personId) => request(`/meetings/${meetingId}/attendees/${personId}`, { method: 'DELETE' }),
