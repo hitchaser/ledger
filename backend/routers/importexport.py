@@ -496,6 +496,7 @@ async def org_commit(file: UploadFile = File(...), db: Session = Depends(get_db)
     ext_to_person = {}
 
     # Pass 1: Match and create/update people
+    processed_names = set()  # prevent creating duplicates from same-name rows in file
     for r in org_rows:
         ext_id = r["external_id"]
         name = r.get("name", "").strip()
@@ -532,13 +533,15 @@ async def org_commit(file: UploadFile = File(...), db: Session = Depends(get_db)
                 from sqlalchemy.orm.attributes import flag_modified
                 flag_modified(person, "profile")
             person.import_source = "org_import"
-            person.external_id = ext_id  # update to current file's ID
+            person.external_id = ext_id
             if person.is_archived:
                 person.is_archived = False
             ext_to_person[ext_id] = person
-            updated_count += 1
-        else:
-            # Create new
+            if name_l not in processed_names:
+                updated_count += 1
+            processed_names.add(name_l)
+        elif name_l not in processed_names:
+            # Create new — only if we haven't already created this name
             display_name = _generate_unique_display_name(name, taken_display_names)
             taken_display_names.add(display_name.lower())
             profile = {
@@ -554,7 +557,13 @@ async def org_commit(file: UploadFile = File(...), db: Session = Depends(get_db)
             db.add(person)
             db.flush()
             ext_to_person[ext_id] = person
+            processed_names.add(name_l)
             created_count += 1
+        else:
+            # Duplicate name row — just map the ext_id to the existing person for Reports To resolution
+            existing_person = next((p for p in ext_to_person.values() if p.name.lower().strip() == name_l), None)
+            if existing_person:
+                ext_to_person[ext_id] = existing_person
 
     # Pass 2: Resolve manager references using file ext_ids (with alias resolution)
     for r in org_rows:
