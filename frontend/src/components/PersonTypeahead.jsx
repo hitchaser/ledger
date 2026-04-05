@@ -70,8 +70,7 @@ export default function PersonTypeahead({ value, onChange, exclude = [], placeho
   };
 
   const handleFocus = () => {
-    setOpen(true);
-    if (!query && results.length === 0) search('');
+    if (query) setOpen(true);
   };
 
   // Close on outside click
