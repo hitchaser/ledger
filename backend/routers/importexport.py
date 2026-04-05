@@ -383,6 +383,13 @@ async def org_preview(file: UploadFile = File(...), db: Session = Depends(get_db
         # Priority 1: exact name + manager match
         person = by_name_mgr.get((name_l, file_mgr_name))
 
+        # Priority 1b: if file manager is blank (root of partial export), match by name only
+        # without treating it as a manager change — their manager just isn't in this file
+        if not person and not file_mgr_name and name_l in by_name:
+            candidates = by_name[name_l]
+            if len(candidates) == 1:
+                person = candidates[0]
+
         if person:
             # Confident match — check for field changes
             changes = {}
@@ -559,10 +566,8 @@ async def org_commit(file: UploadFile = File(...), db: Session = Depends(get_db)
             manager = ext_to_person.get(resolved_to)
             if manager:
                 person.manager_id = manager.id
-            else:
-                errors.append(f"Manager not found for '{person.name}' (reports_to: {reports_to})")
-        elif person and not reports_to:
-            person.manager_id = None
+            # else: Reports To references someone not in this file — leave existing manager
+        # elif person and not reports_to: blank Reports To = root of this export, keep existing manager
 
     # Pass 3: Archive departed — scoped to import subtree by name
     root_names = set()
