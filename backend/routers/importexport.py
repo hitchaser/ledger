@@ -403,30 +403,33 @@ async def org_preview(file: UploadFile = File(...), db: Session = Depends(get_db
             else:
                 unchanged += 1
         elif name_l in by_name:
-            # Name exists but manager is different — could be manager change or different person
+            # Name exists but manager is different
             existing = by_name[name_l]
-            if len(existing) == 1:
-                # Only one person with this name — likely a manager change
+            if len(existing) == 1 and not file_mgr_name:
+                # Single match, file manager blank (partial export root) — safe match
                 p = existing[0]
-                old_mgr = ""
-                if p.manager_id and p.manager:
-                    old_mgr = p.manager.name
-                review.append({
-                    "name": name,
-                    "display_name": p.display_name,
-                    "old_manager": old_mgr,
-                    "new_manager": file_mgr_name,
-                    "reason": "Manager changed — will update",
-                })
-                # Still count as update
                 changes = {}
                 if role and role != (p.role or ""):
                     changes["role"] = {"from": p.role or "", "to": role}
                 profile = p.profile or {}
                 if location and location != profile.get("location", ""):
                     changes["location"] = {"from": profile.get("location", ""), "to": location}
-                changes["manager"] = {"from": old_mgr, "to": file_mgr_name}
-                updates.append({"name": name, "display_name": p.display_name, "changes": changes, "match": "name_only"})
+                if changes:
+                    updates.append({"name": name, "display_name": p.display_name, "changes": changes, "match": "name_only"})
+                else:
+                    unchanged += 1
+            elif len(existing) == 1:
+                # Single match but different manager — likely different person with same name
+                p = existing[0]
+                old_mgr = p.manager.name if p.manager_id and p.manager else ""
+                review.append({
+                    "name": name,
+                    "display_name": p.display_name,
+                    "old_manager": old_mgr,
+                    "new_manager": file_mgr_name,
+                    "reason": f"Same name exists under different manager — will create as new person",
+                })
+                creates.append({"name": name, "role": role, "location": location, "is_leader": is_leader})
             else:
                 # Multiple people with this name — ambiguous
                 review.append({
@@ -496,7 +499,7 @@ async def org_commit(file: UploadFile = File(...), db: Session = Depends(get_db)
     ext_to_person = {}
 
     # Pass 1: Match and create/update people
-    processed_names = set()  # prevent creating duplicates from same-name rows in file
+    matched_person_ids = set()  # track which DB people have been matched to avoid double-matching
     for r in org_rows:
         ext_id = r["external_id"]
         name = r.get("name", "").strip()
@@ -506,15 +509,20 @@ async def org_commit(file: UploadFile = File(...), db: Session = Depends(get_db)
         file_mgr_name = file_mgr_map.get(ext_id, "")
         file_names.add(name_l)
 
-        # Try name+manager match first, then name-only
+        # Try name+manager match first (confident)
         person = by_name_mgr.get((name_l, file_mgr_name))
-        if not person and name_l in by_name:
-            candidates = by_name[name_l]
+        if person and person.id in matched_person_ids:
+            person = None  # already matched to a different file row
+
+        # Fallback: name-only if file manager is blank (partial export root)
+        if not person and not file_mgr_name and name_l in by_name:
+            candidates = [c for c in by_name[name_l] if c.id not in matched_person_ids]
             if len(candidates) == 1:
-                person = candidates[0]  # only one — accept as manager change
+                person = candidates[0]
 
         if person:
             # Update existing
+            matched_person_ids.add(person.id)
             old_name = person.name
             if name and name != old_name:
                 person.name = name
@@ -537,11 +545,9 @@ async def org_commit(file: UploadFile = File(...), db: Session = Depends(get_db)
             if person.is_archived:
                 person.is_archived = False
             ext_to_person[ext_id] = person
-            if name_l not in processed_names:
-                updated_count += 1
-            processed_names.add(name_l)
-        elif name_l not in processed_names:
-            # Create new — only if we haven't already created this name
+            updated_count += 1
+        else:
+            # No confident match — create new person
             display_name = _generate_unique_display_name(name, taken_display_names)
             taken_display_names.add(display_name.lower())
             profile = {
@@ -557,13 +563,7 @@ async def org_commit(file: UploadFile = File(...), db: Session = Depends(get_db)
             db.add(person)
             db.flush()
             ext_to_person[ext_id] = person
-            processed_names.add(name_l)
             created_count += 1
-        else:
-            # Duplicate name row — just map the ext_id to the existing person for Reports To resolution
-            existing_person = next((p for p in ext_to_person.values() if p.name.lower().strip() == name_l), None)
-            if existing_person:
-                ext_to_person[ext_id] = existing_person
 
     # Pass 2: Resolve manager references using file ext_ids (with alias resolution)
     for r in org_rows:
