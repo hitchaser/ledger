@@ -6,11 +6,12 @@ import Avatar from './Avatar';
 
 const LEVEL_COLORS = {
   executive: 'bg-violet-500/15 text-violet-400 border border-violet-500/20',
+  director: 'bg-indigo-500/15 text-indigo-400 border border-indigo-500/20',
   manager: 'bg-blue-500/15 text-blue-400 border border-blue-500/20',
   ic: 'bg-sky-500/15 text-sky-400 border border-sky-500/20',
 };
 
-const LEVEL_LABELS = { executive: 'Executive', manager: 'Management', ic: 'IC' };
+const LEVEL_LABELS = { executive: 'Executive', director: 'Director', manager: 'Management', ic: 'IC' };
 const PAGE_SIZE = 50;
 
 export default function PeopleDirectory({ refreshKey }) {
@@ -99,6 +100,7 @@ export default function PeopleDirectory({ refreshKey }) {
           <select value={form.reporting_level} onChange={e => setForm({...form, reporting_level: e.target.value})}
             className="glass-input rounded px-3 py-1.5 text-sm text-zinc-300">
             <option value="executive">Executive</option>
+            <option value="director">Director</option>
             <option value="manager">Management</option>
             <option value="ic">Individual Contributor</option>
           </select>

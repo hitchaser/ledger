@@ -41,10 +41,10 @@ class ItemStatus(str, enum.Enum):
 
 class ReportingLevel(str, enum.Enum):
     executive = "executive"
+    director = "director"
     manager = "manager"
     ic = "ic"
-    # Legacy values kept for DB compatibility during migration
-    director = "director"
+    # Legacy values kept for DB compatibility
     employee = "employee"
     peer = "peer"
     other = "other"
