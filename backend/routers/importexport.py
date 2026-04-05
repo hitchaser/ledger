@@ -380,6 +380,12 @@ async def org_preview(file: UploadFile = File(...), db: Session = Depends(get_db
     review = []  # ambiguous cases for user review
     file_names = set()  # track all names in file for archive detection
 
+    # Count name occurrences in file for uniqueness check
+    file_name_counts = {}
+    for r in org_rows:
+        nl = r.get("name", "").strip().lower()
+        file_name_counts[nl] = file_name_counts.get(nl, 0) + 1
+
     for r in org_rows:
         ext_id = r["external_id"]
         name = r.get("name", "").strip()
@@ -429,8 +435,27 @@ async def org_preview(file: UploadFile = File(...), db: Session = Depends(get_db
                     updates.append({"name": name, "display_name": p.display_name, "changes": changes, "match": "name_only"})
                 else:
                     unchanged += 1
+            elif len(existing) == 1 and file_name_counts.get(name_l, 0) <= 1:
+                # Unique in both DB and file — safe to auto-match as manager change
+                p = existing[0]
+                old_mgr = p.manager.name if p.manager_id and p.manager else ""
+                changes = {}
+                if role and role != (p.role or ""):
+                    changes["role"] = {"from": p.role or "", "to": role}
+                profile = p.profile or {}
+                if location and location != profile.get("location", ""):
+                    changes["location"] = {"from": profile.get("location", ""), "to": location}
+                changes["manager"] = {"from": old_mgr, "to": file_mgr_name}
+                updates.append({"name": name, "display_name": p.display_name, "changes": changes, "match": "name_only_unique"})
+                review.append({
+                    "name": name,
+                    "display_name": p.display_name,
+                    "old_manager": old_mgr,
+                    "new_manager": file_mgr_name,
+                    "reason": "Manager changed — will update existing person",
+                })
             elif len(existing) == 1:
-                # Single match but different manager — likely different person with same name
+                # Name exists once in DB but multiple times in file — ambiguous
                 p = existing[0]
                 old_mgr = p.manager.name if p.manager_id and p.manager else ""
                 review.append({
@@ -438,11 +463,11 @@ async def org_preview(file: UploadFile = File(...), db: Session = Depends(get_db
                     "display_name": p.display_name,
                     "old_manager": old_mgr,
                     "new_manager": file_mgr_name,
-                    "reason": f"Same name exists under different manager — will create as new person",
+                    "reason": f"Same name appears multiple times in file — will create as new person",
                 })
                 creates.append({"name": name, "role": role, "location": location, "is_leader": is_leader})
             else:
-                # Multiple people with this name — ambiguous
+                # Multiple people with this name in DB — ambiguous
                 review.append({
                     "name": name,
                     "display_name": None,
@@ -509,6 +534,12 @@ async def org_commit(file: UploadFile = File(...), db: Session = Depends(get_db)
     # Map file ext_id → Person (for manager resolution within file)
     ext_to_person = {}
 
+    # Count name occurrences in file for uniqueness check
+    file_name_counts = {}
+    for r in org_rows:
+        nl = r.get("name", "").strip().lower()
+        file_name_counts[nl] = file_name_counts.get(nl, 0) + 1
+
     # Pass 1: Match and create/update people
     matched_person_ids = set()  # track which DB people have been matched to avoid double-matching
     for r in org_rows:
@@ -529,6 +560,12 @@ async def org_commit(file: UploadFile = File(...), db: Session = Depends(get_db)
         if not person and not file_mgr_name and name_l in by_name:
             candidates = [c for c in by_name[name_l] if c.id not in matched_person_ids]
             if len(candidates) == 1:
+                person = candidates[0]
+
+        # Fallback: name-only if unique in both DB and file (manager change / reorg)
+        if not person and file_mgr_name and name_l in by_name:
+            candidates = [c for c in by_name[name_l] if c.id not in matched_person_ids]
+            if len(candidates) == 1 and file_name_counts.get(name_l, 0) <= 1:
                 person = candidates[0]
 
         if person:
