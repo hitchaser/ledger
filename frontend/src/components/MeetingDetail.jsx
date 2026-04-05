@@ -7,7 +7,7 @@ import PersonTypeahead from './PersonTypeahead';
 import { useMentions } from '../hooks/useMentions';
 import MentionDropdown from './MentionDropdown';
 import Avatar from './Avatar';
-import { Square, Send, Copy, ChevronDown, ChevronUp, X, ArrowLeft } from 'lucide-react';
+import { Square, Send, Copy, ChevronDown, ChevronUp, X, ArrowLeft, FolderKanban } from 'lucide-react';
 
 export default function MeetingDetail({ refreshKey, onRefresh, itemUpdate }) {
   const { id } = useParams();
@@ -21,10 +21,14 @@ export default function MeetingDetail({ refreshKey, onRefresh, itemUpdate }) {
   const [metaOpen, setMetaOpen] = useState(false);
   const [captureText, setCaptureText] = useState('');
   const [prep, setPrep] = useState(null);
+  const [allProjects, setAllProjects] = useState([]);
+  const [showProjectPicker, setShowProjectPicker] = useState(false);
+  const [projectSearch, setProjectSearch] = useState('');
   const notesRef = useRef(null);
   const saveTimerRef = useRef(null);
   const captureInputRef = useRef(null);
   const mentions = useMentions();
+  const attendeeTypeaheadRef = useRef(null);
 
   const isActive = meeting && !meeting.ended_at;
 
@@ -34,14 +38,13 @@ export default function MeetingDetail({ refreshKey, onRefresh, itemUpdate }) {
     setTitle(data.title || '');
     setNotes(data.notes || '');
     // Expand metadata if pre-populated with attendees or project
-    if ((data.attendees?.length > 0 || data.project_id) && !data.ended_at) {
+    if (data.attendees?.length > 0 || data.project_id) {
       setMetaOpen(true);
     }
   }, [id]);
 
   const loadItems = useCallback(async () => {
     if (!meeting) return;
-    // Load items from all attendees + project
     const allItems = {};
     for (const a of (meeting.attendees || [])) {
       const personItems = await api.getPersonItems(a.id, 'open');
@@ -56,6 +59,7 @@ export default function MeetingDetail({ refreshKey, onRefresh, itemUpdate }) {
 
   useEffect(() => { loadMeeting(); }, [loadMeeting]);
   useEffect(() => { if (meeting) loadItems(); }, [meeting?.id, meeting?.attendees?.length, meeting?.project_id]);
+  useEffect(() => { api.listProjects().then(setAllProjects).catch(() => {}); }, []);
 
   // Load prep stats for first attendee or project
   useEffect(() => {
@@ -113,10 +117,16 @@ export default function MeetingDetail({ refreshKey, onRefresh, itemUpdate }) {
     setMeeting(updated);
   };
 
+  const setProject = async (projectId) => {
+    const updated = await api.updateMeeting(id, { project_id: projectId || '' });
+    setMeeting(updated);
+    setShowProjectPicker(false);
+    setProjectSearch('');
+  };
+
   const endMeeting = async () => {
     if (!meeting) return;
     setEnding(true);
-    // Save latest notes before ending
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     await api.updateMeeting(id, { notes, title });
     const result = await api.endMeeting(id);
@@ -129,7 +139,6 @@ export default function MeetingDetail({ refreshKey, onRefresh, itemUpdate }) {
     const t = captureText.trim();
     if (!t) return;
     const result = await api.createCapture(t);
-    // Link to all attendees + project
     for (const a of (meeting.attendees || [])) {
       await api.linkPerson(result.id, a.id);
     }
@@ -150,7 +159,6 @@ export default function MeetingDetail({ refreshKey, onRefresh, itemUpdate }) {
       const currentLine = value.slice(lineStart, selectionStart);
       const bulletMatch = currentLine.match(/^(\s*)([-*•])\s/);
       if (bulletMatch) {
-        // If the current line is just a bullet with no content, remove it
         if (currentLine.trim() === bulletMatch[2]) {
           e.preventDefault();
           const newVal = value.slice(0, lineStart) + '\n' + value.slice(selectionStart);
@@ -173,7 +181,7 @@ export default function MeetingDetail({ refreshKey, onRefresh, itemUpdate }) {
 
   if (!meeting) return <div className="p-8 text-zinc-600">Loading meeting...</div>;
 
-  // Summary modal
+  // Summary modal (shown right after ending)
   if (summary && summary.ai_summary !== undefined && summary.ended_at) {
     return (
       <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
@@ -194,7 +202,7 @@ export default function MeetingDetail({ refreshKey, onRefresh, itemUpdate }) {
                 <Copy size={12} /> Copy
               </button>
             )}
-            <button onClick={() => { setSummary(null); navigate('/meetings'); }}
+            <button onClick={() => { setSummary(null); }}
               className="text-xs bg-blue-600/80 hover:bg-blue-500 text-white rounded px-3 py-1.5 border border-blue-500/20 transition-all">
               Done
             </button>
@@ -204,51 +212,153 @@ export default function MeetingDetail({ refreshKey, onRefresh, itemUpdate }) {
     );
   }
 
-  // Ended meeting — read-only view
-  if (!isActive) {
-    return (
-      <div className="max-w-3xl mx-auto px-4 py-4">
-        <button onClick={() => navigate('/meetings')} className="flex items-center gap-1 text-xs text-zinc-600 hover:text-zinc-300 mb-3 transition-colors">
-          <ArrowLeft size={14} /> Meetings
-        </button>
-        <h2 className="text-xl font-semibold text-zinc-100 mb-1">{meeting.title || 'Untitled Meeting'}</h2>
-        <div className="flex items-center gap-3 text-xs text-zinc-600 mb-4">
-          <span>{new Date(meeting.started_at).toLocaleDateString()} {new Date(meeting.started_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-          {meeting.ended_at && <span>— {new Date(meeting.ended_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>}
-          <span>{meeting.items_resolved} resolved &middot; {meeting.items_added} added</span>
-        </div>
+  // Filtered project list for picker
+  const filteredProjects = allProjects.filter(p =>
+    !p.is_archived &&
+    (projectSearch === '' ||
+      p.name.toLowerCase().includes(projectSearch.toLowerCase()) ||
+      (p.short_code && p.short_code.toLowerCase().includes(projectSearch.toLowerCase())))
+  );
 
-        {(meeting.attendees?.length > 0 || meeting.project) && (
-          <div className="flex items-center gap-3 mb-4">
-            {meeting.attendees?.map(a => (
-              <div key={a.id} className="flex items-center gap-1.5 badge bg-indigo-500/10 text-indigo-400 border border-indigo-500/15 cursor-pointer"
-                onClick={() => navigate(`/people/${a.id}`)}>
-                <Avatar src={a.avatar} name={a.display_name} size="xs" />
-                <span>{a.display_name}</span>
-              </div>
-            ))}
-            {meeting.project && (
+  // Shared metadata section (used by both active and ended meetings)
+  const metadataSection = (
+    <div className="px-4 py-3 border-b border-white/[0.06] space-y-3 flex-shrink-0 bg-white/[0.01]">
+      {/* Attendees */}
+      <div>
+        <span className="text-xs text-zinc-600 font-medium uppercase tracking-wide">Attendees</span>
+        <div className="mt-1.5">
+          <div className="w-56 mb-2">
+            <PersonTypeahead
+              ref={attendeeTypeaheadRef}
+              onChange={addAttendee}
+              exclude={(meeting.attendees || []).map(a => a.id)}
+              placeholder="Add attendee..."
+              clearOnSelect
+            />
+          </div>
+          {(meeting.attendees || []).length > 0 && (
+            <div className="flex items-center gap-2 flex-wrap">
+              {(meeting.attendees || []).map(a => (
+                <div key={a.id} className="flex items-center gap-1.5 badge bg-indigo-500/10 text-indigo-400 border border-indigo-500/15">
+                  <Avatar src={a.avatar} name={a.display_name} size="xs" />
+                  <span>{a.display_name}</span>
+                  <button onClick={() => removeAttendee(a.id)} className="text-indigo-600 hover:text-indigo-300 ml-0.5"><X size={10} /></button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Project */}
+      <div>
+        <span className="text-xs text-zinc-600 font-medium uppercase tracking-wide flex items-center gap-1">
+          <FolderKanban size={12} /> Project
+        </span>
+        <div className="mt-1.5">
+          {meeting.project ? (
+            <div className="flex items-center gap-2">
               <span className="badge bg-cyan-500/10 text-cyan-400 border border-cyan-500/15 cursor-pointer"
                 onClick={() => navigate(`/projects/${meeting.project.id}`)}>
                 {meeting.project.short_code || meeting.project.name}
               </span>
-            )}
-          </div>
-        )}
-
-        {meeting.notes && (
-          <div className="mb-4">
-            <h4 className="text-xs text-zinc-600 font-medium uppercase tracking-wide mb-2">Notes</h4>
-            <div className="p-3 glass rounded-lg text-sm text-zinc-300 whitespace-pre-wrap">
-              {formatBullets(meeting.notes)}
+              <button onClick={() => setProject('')} className="text-zinc-600 hover:text-zinc-300 transition-colors"><X size={12} /></button>
             </div>
-          </div>
-        )}
+          ) : (
+            <div className="relative">
+              <button onClick={() => setShowProjectPicker(!showProjectPicker)}
+                className="text-xs text-zinc-600 hover:text-zinc-300 glass rounded px-2 py-1 transition-all">
+                + Add Project
+              </button>
+              {showProjectPicker && (
+                <div className="absolute z-50 top-full left-0 mt-1 w-64 rounded-lg border border-white/10 shadow-xl bg-zinc-900/95 backdrop-blur-xl">
+                  <input value={projectSearch} onChange={e => setProjectSearch(e.target.value)}
+                    placeholder="Search projects..."
+                    className="w-full bg-transparent px-3 py-2 text-sm text-zinc-200 outline-none border-b border-white/[0.06] placeholder-zinc-600"
+                    autoFocus />
+                  <div className="max-h-48 overflow-y-auto">
+                    {filteredProjects.map(p => (
+                      <button key={p.id} onClick={() => setProject(p.id)}
+                        className="w-full text-left px-3 py-1.5 text-sm text-zinc-300 hover:bg-white/[0.05] transition-colors">
+                        {p.name} {p.short_code && <span className="text-xs text-zinc-600">[{p.short_code}]</span>}
+                      </button>
+                    ))}
+                    {filteredProjects.length === 0 && (
+                      <div className="px-3 py-2 text-xs text-zinc-600">No projects found</div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
 
+      {/* Prep stats */}
+      {prep && (
+        <div className="text-xs text-zinc-500">
+          {prep.days_since !== null
+            ? <>{prep.days_since}d since last &middot; {prep.items_resolved} resolved &middot; {prep.new_items} new &middot; {prep.open_items} open</>
+            : <>First meeting &middot; {prep.open_items} open items</>
+          }
+        </div>
+      )}
+    </div>
+  );
+
+  // Ended meeting — editable view
+  if (!isActive) {
+    return (
+      <div className="flex flex-col h-full">
+        {/* Header */}
+        <div className="flex items-center gap-3 px-4 py-3 border-b border-white/[0.06] flex-shrink-0">
+          <button onClick={() => navigate('/meetings')} className="text-zinc-600 hover:text-zinc-300 transition-colors">
+            <ArrowLeft size={16} />
+          </button>
+          <input value={title} onChange={handleTitleChange}
+            placeholder="Untitled Meeting"
+            className="flex-1 bg-transparent text-lg font-semibold text-zinc-100 outline-none placeholder-zinc-700" />
+          <div className="flex items-center gap-2 text-xs text-zinc-600">
+            <span>{new Date(meeting.started_at).toLocaleDateString()} {new Date(meeting.started_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+            {meeting.ended_at && <span>— {new Date(meeting.ended_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>}
+          </div>
+          <button onClick={() => setMetaOpen(!metaOpen)}
+            className="text-xs text-zinc-600 hover:text-zinc-300 flex items-center gap-1 glass rounded px-2 py-1 transition-all">
+            {metaOpen ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+            {metaOpen ? 'Hide Details' : 'Details'}
+          </button>
+        </div>
+
+        {/* Metadata */}
+        {metaOpen && metadataSection}
+
+        {/* Notes — editable */}
+        <div className="flex-1 overflow-y-auto p-4">
+          <textarea
+            ref={notesRef}
+            value={notes}
+            onChange={handleNotesChange}
+            onKeyDown={handleNotesKeyDown}
+            placeholder="Meeting notes..."
+            className="w-full bg-transparent text-sm text-zinc-200 outline-none resize-none placeholder-zinc-700 leading-relaxed"
+            style={{ minHeight: 'calc(100vh - 320px)' }}
+          />
+        </div>
+
+        {/* Summary (read-only) */}
         {meeting.ai_summary && (
-          <div className="mb-4">
-            <h4 className="text-xs text-zinc-600 font-medium uppercase tracking-wide mb-2">Summary</h4>
-            <div className="p-3 glass rounded-lg text-sm text-zinc-400 whitespace-pre-wrap">{meeting.ai_summary}</div>
+          <div className="border-t border-white/[0.06] px-4 py-3 flex-shrink-0">
+            <div className="flex items-center justify-between mb-1">
+              <h4 className="text-xs text-zinc-600 font-medium uppercase tracking-wide">Summary</h4>
+              <div className="flex items-center gap-2 text-xs text-zinc-600">
+                <span>{meeting.items_resolved} resolved &middot; {meeting.items_added} added</span>
+                <button onClick={() => navigator.clipboard.writeText(meeting.ai_summary)}
+                  className="flex items-center gap-1 text-zinc-600 hover:text-zinc-300 transition-colors">
+                  <Copy size={10} /> Copy
+                </button>
+              </div>
+            </div>
+            <div className="p-2 glass rounded text-sm text-zinc-400 whitespace-pre-wrap max-h-40 overflow-y-auto">{meeting.ai_summary}</div>
           </div>
         )}
       </div>
@@ -275,47 +385,7 @@ export default function MeetingDetail({ refreshKey, onRefresh, itemUpdate }) {
       </div>
 
       {/* Metadata (collapsible) */}
-      {metaOpen && (
-        <div className="px-4 py-3 border-b border-white/[0.06] space-y-2 flex-shrink-0 bg-white/[0.01]">
-          {/* Attendees */}
-          <div>
-            <span className="text-xs text-zinc-600 font-medium uppercase tracking-wide">Attendees</span>
-            <div className="flex items-center gap-2 mt-1 flex-wrap">
-              {(meeting.attendees || []).map(a => (
-                <div key={a.id} className="flex items-center gap-1.5 badge bg-indigo-500/10 text-indigo-400 border border-indigo-500/15">
-                  <Avatar src={a.avatar} name={a.display_name} size="xs" />
-                  <span>{a.display_name}</span>
-                  <button onClick={() => removeAttendee(a.id)} className="text-indigo-600 hover:text-indigo-300 ml-0.5"><X size={10} /></button>
-                </div>
-              ))}
-              <div className="w-48">
-                <PersonTypeahead
-                  onChange={addAttendee}
-                  exclude={(meeting.attendees || []).map(a => a.id)}
-                  placeholder="Add attendee..."
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Project + Prep */}
-          <div className="flex items-center gap-4">
-            {meeting.project && (
-              <span className="text-xs text-cyan-400">
-                Project: {meeting.project.short_code || meeting.project.name}
-              </span>
-            )}
-            {prep && (
-              <span className="text-xs text-zinc-500">
-                {prep.days_since !== null
-                  ? <>{prep.days_since}d since last &middot; {prep.items_resolved} resolved &middot; {prep.new_items} new &middot; {prep.open_items} open</>
-                  : <>First meeting &middot; {prep.open_items} open items</>
-                }
-              </span>
-            )}
-          </div>
-        </div>
-      )}
+      {metaOpen && metadataSection}
 
       {/* Notes area — main content */}
       <div className="flex-1 overflow-y-auto p-4">
@@ -335,7 +405,7 @@ export default function MeetingDetail({ refreshKey, onRefresh, itemUpdate }) {
       <div className="border-t border-white/[0.06] px-4 py-3 flex-shrink-0">
         <div className="relative flex items-center gap-2">
           <div className="flex-1 relative">
-            <input type="text" placeholder="Capture item for this meeting... (@ to mention)" value={captureText}
+            <input type="text" placeholder="Add task/item linked to this meeting's attendees & project..." value={captureText}
               ref={captureInputRef}
               onChange={e => { setCaptureText(e.target.value); mentions.updateMention(e.target.value, e.target.selectionStart); }}
               onKeyDown={e => { if (mentions.handleMentionKey(e, captureText, setCaptureText)) return; if (e.key === 'Enter') capture(); }}
@@ -360,9 +430,4 @@ export default function MeetingDetail({ refreshKey, onRefresh, itemUpdate }) {
       </div>
     </div>
   );
-}
-
-function formatBullets(text) {
-  // Simple rendering: lines starting with - or * get bullet formatting
-  return text;
 }

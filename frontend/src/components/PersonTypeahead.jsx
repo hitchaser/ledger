@@ -3,7 +3,7 @@ import { api } from '../api/client';
 import Avatar from './Avatar';
 import { X } from 'lucide-react';
 
-export default function PersonTypeahead({ value, onChange, exclude = [], placeholder = "Search people..." }) {
+export default function PersonTypeahead({ value, onChange, exclude = [], placeholder = "Search people...", clearOnSelect = false }) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
   const [open, setOpen] = useState(false);
@@ -38,11 +38,20 @@ export default function PersonTypeahead({ value, onChange, exclude = [], placeho
   };
 
   const handleSelect = (person) => {
-    setSelected(person);
-    setQuery('');
-    setOpen(false);
-    setResults([]);
-    onChange(person);
+    if (clearOnSelect) {
+      // Don't lock in — just fire callback and reset for next entry
+      setQuery('');
+      setOpen(false);
+      setResults([]);
+      onChange(person);
+      setTimeout(() => inputRef.current?.focus(), 50);
+    } else {
+      setSelected(person);
+      setQuery('');
+      setOpen(false);
+      setResults([]);
+      onChange(person);
+    }
   };
 
   const handleClear = () => {
