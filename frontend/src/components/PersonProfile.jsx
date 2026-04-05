@@ -135,11 +135,12 @@ export default function PersonProfile({ refreshKey, onRefresh, itemUpdate }) {
     setMerging(true);
     try {
       await api.mergePerson(id, targetPerson.id);
+      setShowMerge(false);
       navigate(`/people/${targetPerson.id}`);
     } catch (e) {
       alert('Merge failed: ' + e.message);
+      setMerging(false);
     }
-    setMerging(false);
   };
 
   const handleDelete = async () => {
