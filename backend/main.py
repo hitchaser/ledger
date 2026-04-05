@@ -82,6 +82,7 @@ except Exception as e:
 # Keep the first, delete the rest
 try:
     _db = SessionLocal()
+    from models import ProfileLog as _ProfileLog
     _org_people = _db.query(Person).filter(Person.import_source == "org_import").order_by(Person.created_at).all()
     _seen_ext = {}  # external_id → first Person
     _deleted = 0
@@ -89,7 +90,7 @@ try:
         if p.external_id and p.external_id in _seen_ext:
             # Duplicate external_id — delete this one
             _db.query(CaptureItemPerson).filter(CaptureItemPerson.person_id == p.id).delete()
-            _db.query(ProfileLog).filter(ProfileLog.person_id == p.id).delete()
+            _db.query(_ProfileLog).filter(_ProfileLog.person_id == p.id).delete()
             _db.delete(p)
             _deleted += 1
         elif p.external_id:
@@ -106,7 +107,7 @@ try:
             _profile = p.profile or {}
             _has_profile = any(_profile.get(k) for k in ['spouse','birthday','hobbies','general','children','pets'] if _profile.get(k) and _profile.get(k) not in ['', []])
             if not _has_items and not _has_profile:
-                _db.query(ProfileLog).filter(ProfileLog.person_id == p.id).delete()
+                _db.query(_ProfileLog).filter(_ProfileLog.person_id == p.id).delete()
                 _db.delete(p)
                 _deleted += 1
                 continue
