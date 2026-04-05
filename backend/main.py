@@ -77,33 +77,40 @@ try:
 except Exception as e:
     logger.warning(f"Display name reset skipped: {e}")
 
-# One-time: remove inherited duplicate people (display_name ends with " 2", " 3", etc.)
-# These were created from "(inherited)" rows in the org export
+# One-time: remove inherited duplicate people
+# These share the same name+external_id as another person (from "(inherited)" rows)
+# Keep the first, delete the rest
 try:
     _db = SessionLocal()
-    import re as _re
-    _dupes = _db.query(Person).filter(
-        Person.import_source == "org_import",
-    ).all()
+    _org_people = _db.query(Person).filter(Person.import_source == "org_import").order_by(Person.created_at).all()
+    _seen_ext = {}  # external_id → first Person
     _deleted = 0
-    _dupe_pattern = _re.compile(r'^.+ \d+$')
-    # Find people whose display_name has a number suffix AND another person exists with same external_id prefix
-    _ext_id_counts = {}
-    for p in _dupes:
-        if p.external_id:
-            _ext_id_counts[p.external_id] = _ext_id_counts.get(p.external_id, 0) + 1
-    # Delete org-imported people whose display_name matches "Name N" pattern and name == another person's name
-    _names_seen = {}
-    for p in sorted(_dupes, key=lambda x: x.display_name):
-        if p.name in _names_seen and _dupe_pattern.match(p.display_name) and p.display_name != p.name:
-            # This is a numbered duplicate — delete it
-            from models import CaptureItemPerson, ProfileLog
+    for p in _org_people:
+        if p.external_id and p.external_id in _seen_ext:
+            # Duplicate external_id — delete this one
             _db.query(CaptureItemPerson).filter(CaptureItemPerson.person_id == p.id).delete()
             _db.query(ProfileLog).filter(ProfileLog.person_id == p.id).delete()
             _db.delete(p)
             _deleted += 1
-        else:
-            _names_seen[p.name] = p
+        elif p.external_id:
+            _seen_ext[p.external_id] = p
+    # Also remove people with same name where one has no items/profile data (true duplicates)
+    _seen_names = {}
+    _remaining = _db.query(Person).filter(Person.import_source == "org_import").order_by(Person.created_at).all()
+    for p in _remaining:
+        key = p.name.lower().strip()
+        if key in _seen_names:
+            # Same name, different external_id — check if one is a duplicate row
+            # Keep the earlier one, delete this if it has no items or profile customization
+            _has_items = _db.query(CaptureItemPerson).filter(CaptureItemPerson.person_id == p.id).count()
+            _profile = p.profile or {}
+            _has_profile = any(_profile.get(k) for k in ['spouse','birthday','hobbies','general','children','pets'] if _profile.get(k) and _profile.get(k) not in ['', []])
+            if not _has_items and not _has_profile:
+                _db.query(ProfileLog).filter(ProfileLog.person_id == p.id).delete()
+                _db.delete(p)
+                _deleted += 1
+                continue
+        _seen_names[key] = p
     if _deleted > 0:
         _db.commit()
         logger.info(f"Removed {_deleted} inherited duplicate people")
