@@ -26,7 +26,8 @@ export default function MeetingsList() {
       const title = (m.title || '').toLowerCase();
       const attendees = (m.attendees || []).map(a => a.display_name.toLowerCase()).join(' ');
       const project = m.project ? (m.project.name + ' ' + (m.project.short_code || '')).toLowerCase() : '';
-      return title.includes(q) || attendees.includes(q) || project.includes(q);
+      const notes = (m.notes || '').toLowerCase();
+      return title.includes(q) || attendees.includes(q) || project.includes(q) || notes.includes(q);
     });
   }, [meetings, search]);
 

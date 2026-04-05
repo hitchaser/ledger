@@ -126,7 +126,7 @@ export default function ItemCard({ item, onUpdate, compact = false, readonly = f
   };
 
   return (
-    <div className={`group glass glass-hover rounded-lg ${compact ? 'px-3 py-2' : 'px-4 py-3'} transition-all ${item.is_pinned ? 'border-blue-500/20' : ''}`}>
+    <div className={`group glass glass-hover rounded-lg ${compact ? 'px-3 py-2' : 'px-4 py-3'} transition-all ${item.is_pinned ? 'border-blue-500/20' : ''} ${showDatePicker || showRecurrencePicker ? 'relative z-40' : ''}`}>
       <div className="flex items-start gap-3">
         {!readonly && !isDone && (
           <button onClick={markDone} className="mt-0.5 flex-shrink-0 w-5 h-5 rounded border border-white/10 hover:border-blue-400/50 hover:bg-blue-500/10 flex items-center justify-center transition-all">
