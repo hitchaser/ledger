@@ -5,7 +5,7 @@ import ItemCard from './ItemCard';
 import DraggableItemList from './DraggableItemList';
 import AvatarUpload from './AvatarUpload';
 import PersonTypeahead from './PersonTypeahead';
-import { ArrowLeft, Play, Edit3, Save, Plus, Settings, X, Archive, ArchiveRestore, Trash2, FolderKanban, GitBranch } from 'lucide-react';
+import { ArrowLeft, Play, Edit3, Save, Plus, Settings, X, Archive, ArchiveRestore, Trash2, FolderKanban, GitBranch, Merge } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 const DEFAULT_PROFILE = {
@@ -43,6 +43,8 @@ export default function PersonProfile({ refreshKey, onRefresh, itemUpdate }) {
   const [profileForm, setProfileForm] = useState({ ...DEFAULT_PROFILE });
   const [allPeople, setAllPeople] = useState([]); // For display name dupe check
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [showMerge, setShowMerge] = useState(false);
+  const [merging, setMerging] = useState(false);
   const [quickNote, setQuickNote] = useState('');
   const [availableProjects, setAvailableProjects] = useState([]);
   const [showAddProject, setShowAddProject] = useState(false);
@@ -128,6 +130,18 @@ export default function PersonProfile({ refreshKey, onRefresh, itemUpdate }) {
     navigate('/people');
   };
 
+  const handleMerge = async (targetPerson) => {
+    if (!targetPerson) return;
+    setMerging(true);
+    try {
+      await api.mergePerson(id, targetPerson.id);
+      navigate(`/people/${targetPerson.id}`);
+    } catch (e) {
+      alert('Merge failed: ' + e.message);
+    }
+    setMerging(false);
+  };
+
   const handleDelete = async () => {
     await api.deletePerson(id);
     navigate('/people');
@@ -175,6 +189,10 @@ export default function PersonProfile({ refreshKey, onRefresh, itemUpdate }) {
           <button onClick={() => navigate(`/org-chart?focus=${id}`)}
             className="flex items-center gap-1.5 text-xs glass glass-hover rounded-lg px-3 py-2 text-zinc-500 hover:text-zinc-200 transition-all">
             <GitBranch size={14} /> See Org
+          </button>
+          <button onClick={() => setShowMerge(true)}
+            className="flex items-center gap-1.5 text-xs glass glass-hover rounded-lg px-3 py-2 text-zinc-500 hover:text-zinc-200 transition-all">
+            <Merge size={14} /> Merge
           </button>
           <button onClick={toggleArchive}
             className="flex items-center gap-1.5 text-xs glass glass-hover rounded-lg px-3 py-2 text-zinc-500 hover:text-zinc-200 transition-all">
@@ -425,6 +443,30 @@ export default function PersonProfile({ refreshKey, onRefresh, itemUpdate }) {
                 className="text-xs bg-rose-600/80 hover:bg-rose-500 text-white rounded px-3 py-1.5 border border-rose-500/20 transition-all">
                 Yes, delete permanently
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {showMerge && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="glass rounded-xl max-w-sm w-full p-6 border-white/10 shadow-2xl shadow-black/40">
+            <h3 className="text-lg font-semibold text-zinc-100 mb-2">Merge {person.display_name}</h3>
+            <p className="text-sm text-zinc-400 mb-4">
+              All tasks, notes, profile data, and project assignments will transfer to the target person. {person.display_name} will be archived.
+            </p>
+            <label className="text-xs text-zinc-500 mb-1 block">Merge into:</label>
+            <PersonTypeahead
+              value={null}
+              onChange={(target) => {
+                if (target && confirm(`Merge "${person.display_name}" into "${target.display_name}"? This cannot be undone.`)) {
+                  handleMerge(target);
+                }
+              }}
+              exclude={[id]}
+              placeholder="Search for target person..."
+            />
+            <div className="flex justify-end mt-4">
+              <button onClick={() => setShowMerge(false)} className="text-xs text-zinc-500 px-3 py-1.5">Cancel</button>
             </div>
           </div>
         </div>

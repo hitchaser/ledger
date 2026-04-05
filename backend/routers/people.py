@@ -196,6 +196,78 @@ def delete_person(person_id: UUID, db: Session = Depends(get_db)):
     return {"ok": True}
 
 
+@router.post("/{person_id}/merge/{target_id}")
+def merge_person(person_id: UUID, target_id: UUID, db: Session = Depends(get_db)):
+    """Merge source person into target. Transfers all items, logs, projects. Archives source."""
+    source = db.query(Person).filter(Person.id == person_id).first()
+    target = db.query(Person).filter(Person.id == target_id).first()
+    if not source or not target:
+        raise HTTPException(404, "Person not found")
+    if source.id == target.id:
+        raise HTTPException(400, "Cannot merge a person into themselves")
+
+    # Transfer capture item links (skip if target already linked)
+    existing_target_items = {r.capture_item_id for r in db.query(CaptureItemPerson).filter_by(person_id=target.id).all()}
+    for link in db.query(CaptureItemPerson).filter_by(person_id=source.id).all():
+        if link.capture_item_id not in existing_target_items:
+            link.person_id = target.id
+        else:
+            db.delete(link)  # duplicate link, just remove
+
+    # Transfer profile logs
+    for log in db.query(ProfileLog).filter_by(person_id=source.id).all():
+        log.person_id = target.id
+
+    # Transfer project assignments (skip if target already assigned)
+    existing_target_projects = {r.project_id for r in db.query(PersonProject).filter_by(person_id=target.id).all()}
+    for link in db.query(PersonProject).filter_by(person_id=source.id).all():
+        if link.project_id not in existing_target_projects:
+            link.person_id = target.id
+        else:
+            db.delete(link)
+
+    # Merge profile data: copy non-empty fields from source that are empty on target
+    if source.profile:
+        import copy
+        target_profile = copy.deepcopy(target.profile or {})
+        source_profile = source.profile
+        for key in ['spouse', 'anniversary', 'birthday', 'hobbies', 'location', 'address']:
+            if source_profile.get(key) and not target_profile.get(key):
+                target_profile[key] = source_profile[key]
+        for key in ['children', 'pets']:
+            source_list = source_profile.get(key, [])
+            target_list = target_profile.get(key, [])
+            if source_list and not target_list:
+                target_profile[key] = source_list
+        # Append general notes
+        source_general = source_profile.get('general', '')
+        if source_general:
+            existing = target_profile.get('general', '')
+            target_profile['general'] = (existing + '\n' + source_general).strip() if existing else source_general
+        target.profile = target_profile
+        from sqlalchemy.orm.attributes import flag_modified
+        flag_modified(target, "profile")
+
+    # Copy avatar if target doesn't have one
+    if source.avatar and not target.avatar:
+        target.avatar = source.avatar
+
+    # Remap any people who report to source → now report to target
+    db.query(Person).filter(Person.manager_id == source.id).update(
+        {"manager_id": target.id}, synchronize_session=False
+    )
+
+    # Archive source
+    source.is_archived = True
+
+    db.commit()
+    return {
+        "ok": True,
+        "merged_into": str(target.id),
+        "source_archived": str(source.id),
+    }
+
+
 @router.post("/{person_id}/projects/{project_id}")
 def link_person_project(person_id: UUID, project_id: UUID, db: Session = Depends(get_db)):
     existing = db.query(PersonProject).filter_by(person_id=person_id, project_id=project_id).first()

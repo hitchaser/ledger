@@ -46,6 +46,7 @@ export const api = {
   getPersonItems: (id, status = 'open') => request(`/people/${id}/items?status=${status}`),
   getPersonLogs: (id) => request(`/people/${id}/logs`),
   deletePerson: (id) => request(`/people/${id}`, { method: 'DELETE' }),
+  mergePerson: (sourceId, targetId) => request(`/people/${sourceId}/merge/${targetId}`, { method: 'POST' }),
   linkPersonProject: (personId, projectId) => request(`/people/${personId}/projects/${projectId}`, { method: 'POST' }),
   unlinkPersonProject: (personId, projectId) => request(`/people/${personId}/projects/${projectId}`, { method: 'DELETE' }),
 
