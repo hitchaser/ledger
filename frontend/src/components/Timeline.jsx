@@ -2,6 +2,7 @@ import { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import { Clock, CheckCircle, Users, FileText, MessageSquare, ChevronDown, ChevronUp } from 'lucide-react';
+import { useDelayedLoading } from '../hooks/useDelayedLoading';
 
 const EVENT_ICONS = {
   item_created: { icon: FileText, color: 'text-blue-400' },
@@ -69,12 +70,13 @@ export default function Timeline() {
 
   useEffect(() => { api.getTimeline(days).then(setData).catch(console.error); }, [days]);
 
-  if (!data) return <div className="p-8 text-zinc-600">Loading timeline...</div>;
+  const showLoading = useDelayedLoading(!data);
+  if (!data) return showLoading ? <div className="p-8 text-zinc-600">Loading timeline...</div> : null;
 
   const grouped = groupByDate(data.events);
 
   return (
-    <div className="max-w-3xl mx-auto px-4 py-4">
+    <div className="max-w-4xl mx-auto px-4 py-4 page-transition">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-semibold text-zinc-200 flex items-center gap-2">
           <Clock size={20} className="text-blue-400" /> Timeline

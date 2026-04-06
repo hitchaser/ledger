@@ -3,6 +3,7 @@ import { api } from '../api/client';
 import ItemCard from './ItemCard';
 import { Link } from 'react-router-dom';
 import { AlertTriangle, CalendarDays, Users, HelpCircle, Clock, Inbox } from 'lucide-react';
+import { useDelayedLoading } from '../hooks/useDelayedLoading';
 
 export default function DailyDigest() {
   const [digest, setDigest] = useState(null);
@@ -10,10 +11,11 @@ export default function DailyDigest() {
   const loadDigest = () => api.getDigest().then(setDigest).catch(console.error);
   useEffect(() => { loadDigest(); }, []);
 
-  if (!digest) return <div className="p-8 text-zinc-600">Loading digest...</div>;
+  const showLoading = useDelayedLoading(!digest);
+  if (!digest) return showLoading ? <div className="p-8 text-zinc-600">Loading digest...</div> : null;
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-4">
+    <div className="max-w-4xl mx-auto px-4 py-4 page-transition">
       <h2 className="text-lg font-semibold text-zinc-200 mb-4 flex items-center gap-2">
         <CalendarDays size={20} className="text-blue-400" /> Daily Digest
       </h2>

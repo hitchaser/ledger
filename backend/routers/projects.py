@@ -58,15 +58,17 @@ def update_project(project_id: UUID, body: ProjectUpdate, db: Session = Depends(
     p = db.query(ProjectModel).filter(ProjectModel.id == project_id).first()
     if not p:
         raise HTTPException(404, "Not found")
-    for field, val in body.model_dump(exclude_unset=True).items():
+    data = body.model_dump(exclude_unset=True)
+    status_changed = "status" in data
+    for field, val in data.items():
         setattr(p, field, val)
 
-    # Auto-archive when status set to complete or cancelled
-    if p.status in ("complete", "cancelled"):
-        p.is_archived = True
-    # Auto-unarchive when status set back to active or on_hold
-    elif p.status in ("active", "on_hold"):
-        p.is_archived = False
+    # Auto-archive/unarchive only when status is explicitly changed
+    if status_changed:
+        if p.status in ("complete", "cancelled"):
+            p.is_archived = True
+        elif p.status in ("active", "on_hold"):
+            p.is_archived = False
 
     db.commit()
     db.refresh(p)

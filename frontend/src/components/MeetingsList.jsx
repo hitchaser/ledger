@@ -2,7 +2,8 @@ import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import Avatar from './Avatar';
-import { Plus, Radio, Search } from 'lucide-react';
+import { Plus, Play, Radio, Search } from 'lucide-react';
+import { useDelayedLoading } from '../hooks/useDelayedLoading';
 
 export default function MeetingsList() {
   const navigate = useNavigate();
@@ -46,15 +47,16 @@ export default function MeetingsList() {
     }
   };
 
-  if (loading) return <div className="p-8 text-zinc-600">Loading...</div>;
+  const showLoading = useDelayedLoading(loading);
+  if (loading) return showLoading ? <div className="p-8 text-zinc-600">Loading...</div> : null;
 
   return (
-    <div className="max-w-3xl mx-auto px-4 py-4">
+    <div className="max-w-4xl mx-auto px-4 py-4 page-transition">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-semibold text-zinc-100">Meetings</h2>
         <button onClick={newMeeting}
-          className="flex items-center gap-1.5 bg-blue-600/80 hover:bg-blue-500 text-white text-sm px-4 py-2 rounded-lg border border-blue-500/20 transition-all">
-          <Plus size={14} /> New Meeting
+          className="flex items-center gap-1.5 bg-blue-600/80 hover:bg-blue-500 text-white text-xs px-3 py-1.5 rounded border border-blue-500/20 transition-all">
+          <Play size={12} /> Start Meeting
         </button>
       </div>
 

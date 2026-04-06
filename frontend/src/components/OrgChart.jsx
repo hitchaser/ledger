@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../api/client';
 import Avatar from './Avatar';
 import { GitBranch, ChevronDown, ChevronRight, Search, Loader2 } from 'lucide-react';
+import { useDelayedLoading } from '../hooks/useDelayedLoading';
 
 function OrgRow({ node, depth, focusId, onToggle, onNavigate, onFocus, loadingIds }) {
   const isFocus = node.id === focusId;
@@ -43,13 +44,13 @@ function OrgRow({ node, depth, focusId, onToggle, onNavigate, onFocus, loadingId
         </div>
 
         <div className="flex items-center gap-1.5 flex-shrink-0">
-          {hasChildren && <span className="text-[10px] text-zinc-600" title={`${node.child_count} direct, ${node.org_count} total`}>{node.child_count === node.org_count ? node.org_count : `${node.child_count}/${node.org_count}`}</span>}
           {!isFocus && (
             <button onClick={() => onFocus(node.id)}
               className="text-[10px] text-zinc-700 hover:text-blue-400 opacity-0 group-hover:opacity-100 transition-all px-1">
               focus
             </button>
           )}
+          {hasChildren && <span className="text-[10px] text-zinc-600" title={`${node.child_count} direct, ${node.org_count} total`}>{node.child_count === node.org_count ? node.org_count : `${node.child_count}/${node.org_count}`}</span>}
         </div>
       </div>
 
@@ -143,12 +144,13 @@ export default function OrgChartPage() {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  if (!tree) return <div className="p-8 text-zinc-600">Loading org chart...</div>;
+  const showLoading = useDelayedLoading(!tree);
+  if (!tree) return showLoading ? <div className="p-8 text-zinc-600">Loading org chart...</div> : null;
 
   const { focus_id, chain, total } = focusData;
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-4">
+    <div className="max-w-4xl mx-auto px-4 py-4 page-transition">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-semibold text-zinc-200 flex items-center gap-2">
           <GitBranch size={20} className="text-blue-400" /> Org Chart

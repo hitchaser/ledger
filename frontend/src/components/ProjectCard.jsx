@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
+import { useDelayedLoading } from '../hooks/useDelayedLoading';
 import ItemCard from './ItemCard';
 import DraggableItemList from './DraggableItemList';
 import PersonTypeahead from './PersonTypeahead';
@@ -106,10 +107,11 @@ export default function ProjectCard({ refreshKey, onRefresh, itemUpdate }) {
     navigate('/projects');
   };
 
-  if (!project) return <div className="p-8 text-zinc-600">Loading...</div>;
+  const showLoading = useDelayedLoading(!project);
+  if (!project) return showLoading ? <div className="p-8 text-zinc-600">Loading...</div> : null;
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-4">
+    <div className="max-w-4xl mx-auto px-4 py-4 page-transition">
       <button onClick={() => navigate('/projects')} className="flex items-center gap-1 text-xs text-zinc-600 hover:text-zinc-300 mb-3 transition-colors">
         <ArrowLeft size={14} /> Projects
       </button>
@@ -137,8 +139,8 @@ export default function ProjectCard({ refreshKey, onRefresh, itemUpdate }) {
             {project.is_archived ? <><ArchiveRestore size={14} /> Restore</> : <><Archive size={14} /> Archive</>}
           </button>
           <button onClick={startMeeting}
-            className="flex items-center gap-1.5 bg-blue-600/80 hover:bg-blue-500 text-white text-sm px-4 py-2 rounded-lg border border-blue-500/20 transition-all">
-            <Play size={14} /> Start Meeting
+            className="flex items-center gap-1.5 bg-blue-600/80 hover:bg-blue-500 text-white text-xs px-3 py-1.5 rounded border border-blue-500/20 transition-all">
+            <Play size={12} /> Start Meeting
           </button>
         </div>
       </div>
@@ -201,12 +203,21 @@ export default function ProjectCard({ refreshKey, onRefresh, itemUpdate }) {
       </div>
 
       {/* Team Members */}
-      <div className="mb-4 p-3 glass rounded-lg">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-xs text-zinc-500 font-medium uppercase tracking-wide flex items-center gap-1"><Users size={12} /> Team</span>
-          <button onClick={() => setShowAddPerson(!showAddPerson)} className="text-xs text-zinc-600 hover:text-zinc-300 transition-colors">
-            <Plus size={14} />
-          </button>
+      <div className="mb-4 p-3 glass rounded-lg relative z-20 overflow-visible">
+        <span className="text-xs text-zinc-500 font-medium uppercase tracking-wide flex items-center gap-1 mb-2"><Users size={12} /> Team</span>
+        <div className="w-56 mb-2">
+          <PersonTypeahead
+            onChange={async (person) => {
+              if (person) {
+                await api.linkProjectPerson(id, person.id);
+                const u = await api.getProject(id);
+                setProject(u);
+              }
+            }}
+            exclude={project.people?.map(p => p.id) || []}
+            placeholder="Add team member..."
+            clearOnSelect
+          />
         </div>
         {project.people?.length > 0 ? (
           <div className="flex flex-wrap gap-2">
@@ -221,22 +232,6 @@ export default function ProjectCard({ refreshKey, onRefresh, itemUpdate }) {
           </div>
         ) : (
           <span className="text-xs text-zinc-700 italic">No team members assigned</span>
-        )}
-        {showAddPerson && (
-          <div className="mt-2">
-            <PersonTypeahead
-              onChange={async (person) => {
-                if (person) {
-                  await api.linkProjectPerson(id, person.id);
-                  const u = await api.getProject(id);
-                  setProject(u);
-                  setShowAddPerson(false);
-                }
-              }}
-              exclude={project.people?.map(p => p.id) || []}
-              placeholder="Search for team member..."
-            />
-          </div>
         )}
       </div>
 

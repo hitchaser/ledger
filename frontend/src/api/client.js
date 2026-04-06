@@ -11,8 +11,13 @@ async function request(path, options = {}) {
     throw new Error('Session expired');
   }
   if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`${res.status}: ${text}`);
+    const data = await res.json().catch(() => null);
+    const msg = data?.detail || `${res.status}`;
+    const err = new Error(msg);
+    err.status = res.status;
+    err.detail = data?.detail;
+    err.retryAfter = res.headers.get('Retry-After');
+    throw err;
   }
   return res.json();
 }
@@ -150,4 +155,11 @@ export const api = {
   // Settings
   getSettings: () => request('/settings'),
   updateSettings: (data) => request('/settings', { method: 'PUT', body: JSON.stringify(data) }),
+
+  // TOTP / 2FA
+  verifyTotp: (code, pendingToken) => request('/auth/verify-totp', { method: 'POST', body: JSON.stringify({ code, pending_token: pendingToken }) }),
+  getTotpStatus: () => request('/auth/totp/status'),
+  setupTotp: () => request('/auth/totp/setup', { method: 'POST' }),
+  confirmTotp: (code, secret) => request('/auth/totp/setup/confirm', { method: 'POST', body: JSON.stringify({ code, secret }) }),
+  disableTotp: (code) => request('/auth/totp/disable', { method: 'POST', body: JSON.stringify({ code }) }),
 };

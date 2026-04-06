@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api/client';
-import { UserPlus, Search, Archive, Users, Building2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { UserPlus, Search, Archive, Users, Building2, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import Avatar from './Avatar';
 
 const LEVEL_COLORS = {
@@ -17,7 +17,7 @@ const PAGE_SIZE = 50;
 export default function PeopleDirectory({ refreshKey }) {
   const [people, setPeople] = useState([]);
   const [total, setTotal] = useState(0);
-  const [projects, setProjects] = useState([]);
+  const [allProjects, setAllProjects] = useState([]);
   const [search, setSearch] = useState('');
   const [showArchived, setShowArchived] = useState(false);
   const [scope, setScope] = useState('my_org');
@@ -26,7 +26,7 @@ export default function PeopleDirectory({ refreshKey }) {
   const [form, setForm] = useState({
     name: '', display_name: '', role: '', reporting_level: 'ic',
     profile: { spouse: '', anniversary: '', children: '', pets: '', birthday: '', hobbies: '', location: '', general: '' },
-    selectedProjectIds: [],
+    selectedProjects: [],
   });
 
   useEffect(() => {
@@ -43,7 +43,7 @@ export default function PeopleDirectory({ refreshKey }) {
     }).catch(console.error);
   }, [refreshKey, showArchived, search, scope, page]);
 
-  useEffect(() => { api.listProjects().then(setProjects).catch(console.error); }, []);
+  useEffect(() => { api.listProjects().then(p => setAllProjects(p)).catch(console.error); }, []);
   useEffect(() => { setPage(0); }, [search, scope, showArchived]);
 
   const displayNameDupe = (() => {
@@ -60,14 +60,14 @@ export default function PeopleDirectory({ refreshKey }) {
       children: form.profile.children ? form.profile.children.split(',').map(s => s.trim()).filter(Boolean) : [],
       pets: form.profile.pets ? form.profile.pets.split(',').map(s => s.trim()).filter(Boolean) : [],
     };
-    const { selectedProjectIds, ...personData } = form;
+    const { selectedProjects, ...personData } = form;
     const newPerson = await api.createPerson({ ...personData, display_name: form.display_name || form.name, profile: profileData });
-    for (const projId of selectedProjectIds) {
-      await api.linkPersonProject(newPerson.id, projId);
+    for (const proj of selectedProjects) {
+      await api.linkPersonProject(newPerson.id, proj.id);
     }
     setForm({ name: '', display_name: '', role: '', reporting_level: 'ic',
       profile: { spouse: '', anniversary: '', children: '', pets: '', birthday: '', hobbies: '', location: '', general: '' },
-      selectedProjectIds: [] });
+      selectedProjects: [] });
     setShowForm(false);
     setPage(0);
   };
@@ -77,7 +77,7 @@ export default function PeopleDirectory({ refreshKey }) {
   const showingTo = Math.min((page + 1) * PAGE_SIZE, total);
 
   return (
-    <div className="max-w-3xl mx-auto px-4 py-4">
+    <div className="max-w-4xl mx-auto px-4 py-4 page-transition">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
           <h2 className="text-lg font-semibold text-zinc-200">People</h2>
@@ -90,7 +90,7 @@ export default function PeopleDirectory({ refreshKey }) {
       </div>
 
       {showForm && (
-        <form onSubmit={handleCreate} className="mb-4 p-3 glass rounded-lg grid grid-cols-2 gap-2">
+        <form onSubmit={handleCreate} className="mb-4 p-3 glass rounded-lg grid grid-cols-2 gap-2 relative z-20 overflow-visible">
           <input placeholder="Full name *" value={form.name} onChange={e => setForm({...form, name: e.target.value})}
             className="glass-input rounded px-3 py-1.5 text-sm text-zinc-200 outline-none" />
           <input placeholder="Display name" value={form.display_name} onChange={e => setForm({...form, display_name: e.target.value})}
@@ -123,29 +123,19 @@ export default function PeopleDirectory({ refreshKey }) {
             className="col-span-2 glass-input rounded px-3 py-1.5 text-sm text-zinc-200 outline-none" />
           <textarea placeholder="General notes..." value={form.profile.general} onChange={e => setForm({...form, profile: {...form.profile, general: e.target.value}})}
             className="col-span-2 glass-input rounded px-3 py-1.5 text-sm text-zinc-200 outline-none resize-none h-16" />
-          {projects.length > 0 && (
-            <div className="col-span-2">
-              <label className="text-xs text-zinc-600 mb-1 block">Projects</label>
-              <div className="flex flex-wrap gap-1.5">
-                {projects.map(pr => {
-                  const selected = form.selectedProjectIds.includes(pr.id);
-                  return (
-                    <button key={pr.id} type="button"
-                      onClick={() => setForm({...form, selectedProjectIds: selected
-                        ? form.selectedProjectIds.filter(pid => pid !== pr.id)
-                        : [...form.selectedProjectIds, pr.id]
-                      })}
-                      className={`badge cursor-pointer transition-all ${selected
-                        ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'
-                        : 'glass text-zinc-500 hover:text-zinc-300'
-                      }`}>
-                      {pr.short_code || pr.name}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
+          <div className="col-span-2">
+            <label className="text-xs text-zinc-600 mb-1 block">Projects</label>
+            <ProjectTypeaheadMulti
+              projects={allProjects}
+              selected={form.selectedProjects}
+              onAdd={(proj) => {
+                if (!form.selectedProjects.find(p => p.id === proj.id)) {
+                  setForm({...form, selectedProjects: [...form.selectedProjects, proj]});
+                }
+              }}
+              onRemove={(projId) => setForm({...form, selectedProjects: form.selectedProjects.filter(p => p.id !== projId)})}
+            />
+          </div>
           {displayNameDupe && (
             <div className="col-span-2 p-2 rounded bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs">
               Display name "{form.display_name || form.name}" is already used by <strong>{displayNameDupe.name}</strong>. Consider a unique name (e.g. first name + last initial) to avoid linking confusion.
@@ -193,10 +183,10 @@ export default function PeopleDirectory({ refreshKey }) {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <span className={`badge ${LEVEL_COLORS[p.reporting_level] || 'bg-zinc-500/10 text-zinc-500 border border-zinc-500/15'}`}>{LEVEL_LABELS[p.reporting_level] || p.reporting_level}</span>
               {p.open_item_count > 0 && (
                 <span className="text-xs text-zinc-600">{p.open_item_count} open</span>
               )}
+              <span className={`badge ${LEVEL_COLORS[p.reporting_level] || 'bg-zinc-500/10 text-zinc-500 border border-zinc-500/15'}`}>{LEVEL_LABELS[p.reporting_level] || p.reporting_level}</span>
             </div>
           </Link>
         ))}
@@ -217,6 +207,85 @@ export default function PeopleDirectory({ refreshKey }) {
               <ChevronRight size={14} />
             </button>
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+function ProjectTypeaheadMulti({ projects, selected, onAdd, onRemove }) {
+  const [query, setQuery] = useState('');
+  const [open, setOpen] = useState(false);
+  const [highlightIdx, setHighlightIdx] = useState(0);
+  const inputRef = useRef(null);
+  const containerRef = useRef(null);
+
+  const filtered = projects.filter(p =>
+    !p.is_archived &&
+    !selected.find(s => s.id === p.id) &&
+    (query === '' ||
+      p.name.toLowerCase().includes(query.toLowerCase()) ||
+      (p.short_code && p.short_code.toLowerCase().includes(query.toLowerCase())))
+  ).slice(0, 10);
+
+  const handleSelect = (project) => {
+    onAdd(project);
+    setQuery('');
+    setOpen(false);
+    setTimeout(() => inputRef.current?.focus(), 50);
+  };
+
+  const handleKeyDown = (e) => {
+    if (!open || filtered.length === 0) return;
+    if (e.key === 'ArrowDown') { e.preventDefault(); setHighlightIdx(i => Math.min(i + 1, filtered.length - 1)); }
+    if (e.key === 'ArrowUp') { e.preventDefault(); setHighlightIdx(i => Math.max(i - 1, 0)); }
+    if (e.key === 'Enter') { e.preventDefault(); handleSelect(filtered[highlightIdx]); }
+    if (e.key === 'Escape') { setOpen(false); }
+  };
+
+  useEffect(() => {
+    const handler = (e) => {
+      if (containerRef.current && !containerRef.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  return (
+    <div>
+      <div ref={containerRef} className="relative z-50">
+        <input
+          ref={inputRef}
+          value={query}
+          onChange={e => { setQuery(e.target.value); setOpen(true); setHighlightIdx(0); }}
+          onFocus={() => { if (query) setOpen(true); }}
+          onKeyDown={handleKeyDown}
+          placeholder="Add project..."
+          className="w-full glass-input rounded px-3 py-1.5 text-sm text-zinc-200 outline-none"
+        />
+        {open && query.length > 0 && filtered.length > 0 && (
+          <div className="absolute z-50 top-full left-0 right-0 mt-1 rounded-lg border border-white/10 max-h-48 overflow-y-auto shadow-xl bg-zinc-900/95 backdrop-blur-xl">
+            {filtered.map((p, idx) => (
+              <button key={p.id} type="button" onClick={() => handleSelect(p)}
+                className={`w-full text-left px-3 py-1.5 text-sm transition-colors ${
+                  idx === highlightIdx ? 'bg-blue-500/15 text-zinc-200' : 'text-zinc-300 hover:bg-white/[0.04]'
+                }`}>
+                {p.name} {p.short_code && <span className="text-xs text-zinc-600">[{p.short_code}]</span>}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+      {selected.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mt-2">
+          {selected.map(pr => (
+            <div key={pr.id} className="flex items-center gap-1.5 badge bg-cyan-500/20 text-cyan-400 border border-cyan-500/30">
+              <span>{pr.short_code || pr.name}</span>
+              <button type="button" onClick={() => onRemove(pr.id)}
+                className="text-cyan-600 hover:text-cyan-300 ml-0.5"><X size={10} /></button>
+            </div>
+          ))}
         </div>
       )}
     </div>

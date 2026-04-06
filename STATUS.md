@@ -1,5 +1,47 @@
 # Ledger — Status
 
+## Phase 2c: Auth Hardening — TOTP 2FA + Rate Limiting (2026-04-06)
+
+### Rate Limiting
+- [x] In-memory rate limiter: 5 failed attempts → 15-minute IP lockout
+- [x] X-Forwarded-For support (Cloudflare/Caddy) with fallback to client.host
+- [x] 429 response with retry_after seconds
+- [x] Frontend: lockout message with countdown on Login page
+
+### Password Hashing
+- [x] bcrypt password hashing (passlib)
+- [x] Auto-detect if LEDGER_PASSWORD env var is already a bcrypt hash ($2b$ prefix)
+- [x] Transparent upgrade — login behavior unchanged
+
+### TOTP Two-Factor Authentication
+- [x] TOTP secret encrypted with Fernet (derived from APP_SECRET_KEY) stored in Settings table
+- [x] Login flow: password → if TOTP enabled → pending_token (5-min JWT) → TOTP verification → full session
+- [x] POST /api/auth/verify-totp — verify TOTP code or backup code, issue session
+- [x] GET /api/auth/totp/status — check 2FA status + remaining backup codes
+- [x] POST /api/auth/totp/setup — generate secret + QR code (base64 PNG)
+- [x] POST /api/auth/totp/setup/confirm — verify code, enable 2FA, return 8 backup codes
+- [x] POST /api/auth/totp/disable — requires current TOTP code
+- [x] POST /api/auth/totp/reset — emergency reset via TOTP_RESET_TOKEN env var
+- [x] Backup codes: 8 random hex codes, stored as bcrypt hashes, single-use
+- [x] Auto-submit on 6-digit code entry
+
+### Frontend
+- [x] Login: two-step flow (password → TOTP) with slide transition and ShieldCheck icon
+- [x] Login: handles 429 rate limit with error message
+- [x] Settings: new "Security" section with 2FA status, setup wizard, disable flow
+- [x] Settings: QR code display + manual secret + confirmation input
+- [x] Settings: backup codes display with copy + "I've saved these" flow
+- [x] API client: verifyTotp, getTotpStatus, setupTotp, confirmTotp, disableTotp methods
+
+### Middleware
+- [x] Pending 2FA tokens (pending_2fa claim) rejected from general API routes
+- [x] /api/auth/* paths remain exempt from auth middleware
+
+### Dependencies Added
+- bcrypt 4.2.1, passlib[bcrypt] 1.7.4, pyotp 2.9.0, qrcode[pil] 8.0, cryptography 44.0.0
+
+---
+
 ## Phase 2b: Org Import & Scale — Deployed (2026-04-04)
 
 ### XLSX Org Chart Import

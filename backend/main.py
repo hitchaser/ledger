@@ -44,13 +44,7 @@ try:
 except Exception:
     pass  # Values already exist
 
-try:
-    with engine.begin() as conn:
-        conn.execute(sa_text("UPDATE people SET reporting_level = 'executive' WHERE reporting_level = 'director'"))
-        conn.execute(sa_text("UPDATE people SET reporting_level = 'ic' WHERE reporting_level IN ('employee', 'peer', 'other')"))
-    logger.info("Migrated reporting_level data: director→executive, employee/peer/other→ic")
-except Exception as e:
-    logger.warning(f"Reporting level migration skipped: {e}")
+# One-time reporting_level migration removed — was converting director→executive on every deploy
 
 _people_cols = [c["name"] for c in _insp.get_columns("people")]
 if "external_id" not in _people_cols:
@@ -453,7 +447,10 @@ async def auth_middleware(request: Request, call_next):
     if not token:
         return JSONResponse(status_code=401, content={"detail": "Not authenticated"})
     try:
-        verify_token(token)
+        payload = verify_token(token)
+        # Reject pending 2FA tokens from accessing general API routes
+        if payload.get("pending_2fa"):
+            return JSONResponse(status_code=401, content={"detail": "2FA verification required"})
     except Exception:
         return JSONResponse(status_code=401, content={"detail": "Invalid or expired session"})
 

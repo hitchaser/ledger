@@ -37,7 +37,7 @@ export default function Feed({ refreshKey, onRefresh, itemUpdate, showDigestBann
   }, [itemUpdate]);
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-4">
+    <div className="max-w-4xl mx-auto px-4 py-4 page-transition">
       {showDigestBanner && (
         <div className="mb-4 p-3 glass rounded-lg flex items-center justify-between border-blue-500/20">
           <div className="flex items-center gap-2 text-blue-400 text-sm">
@@ -57,7 +57,7 @@ export default function Feed({ refreshKey, onRefresh, itemUpdate, showDigestBann
           {TYPE_OPTIONS.map(o => <option key={o} value={o}>{o === 'all' ? 'All Types' : o}</option>)}
         </select>
         <input type="text" placeholder="Search..." value={search} onChange={e => setSearch(e.target.value)}
-          className="glass-input rounded px-2 py-1 text-xs text-zinc-400 w-40 outline-none" />
+          className="glass-input rounded px-2 py-1 text-xs text-zinc-400 flex-1 outline-none" />
         <label className="flex items-center gap-1 text-xs text-zinc-600 ml-auto cursor-pointer">
           <input type="checkbox" checked={showArchive} onChange={e => setShowArchive(e.target.checked)} className="rounded" />
           Show archive

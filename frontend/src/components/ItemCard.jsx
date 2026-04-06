@@ -127,7 +127,7 @@ export default function ItemCard({ item, onUpdate, compact = false, readonly = f
 
   return (
     <div className={`group glass glass-hover rounded-lg ${compact ? 'px-3 py-2' : 'px-4 py-3'} transition-all ${item.is_pinned ? 'border-blue-500/20' : ''} ${showDatePicker || showRecurrencePicker ? 'relative z-40' : ''}`}>
-      <div className="flex items-start gap-3">
+      <div className="flex items-start gap-3 relative">
         {!readonly && !isDone && (
           <button onClick={markDone} className="mt-0.5 flex-shrink-0 w-5 h-5 rounded border border-white/10 hover:border-blue-400/50 hover:bg-blue-500/10 flex items-center justify-center transition-all">
             <Check size={12} className="md:opacity-0 md:group-hover:opacity-100 text-blue-400 transition-opacity" />
@@ -139,22 +139,10 @@ export default function ItemCard({ item, onUpdate, compact = false, readonly = f
           </button>
         )}
         <div className="flex-1 min-w-0">
-          <div className="flex items-start gap-1">
-            {item.is_pinned && <Pin size={12} className="text-blue-400 mt-0.5 flex-shrink-0" />}
-            {item.recurrence && <Repeat size={12} className="text-violet-400 mt-0.5 flex-shrink-0" title={`Recurring: ${item.recurrence}`} />}
-            <p className={`text-sm leading-relaxed ${isDone ? 'text-zinc-500 line-through' : 'text-zinc-300'}`}>
-              {displayText}
-              {item.raw_text.length > 120 && !editing && (
-                <button onClick={() => setExpanded(!expanded)} className="ml-1 text-zinc-600 hover:text-zinc-400">
-                  {expanded ? <ChevronUp size={14} className="inline" /> : <ChevronDown size={14} className="inline" />}
-                </button>
-              )}
-            </p>
-          </div>
-
           {editing ? (
-            <div className="mt-2">
-            <input value={editText} onChange={e => setEditText(e.target.value)}
+            <div>
+            <input value={editText} onChange={e => setEditText(e.target.value)} autoFocus
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); saveEdit(); } }}
               className="w-full glass-input rounded px-2 py-1.5 text-sm text-zinc-200 outline-none mb-2" />
             <div className="flex flex-wrap items-center gap-2">
               <select value={editType} onChange={e => setEditType(e.target.value)}
@@ -212,6 +200,19 @@ export default function ItemCard({ item, onUpdate, compact = false, readonly = f
             </div>
             </div>
           ) : (
+            <>
+            <div className="flex items-start gap-1">
+              {item.is_pinned && <Pin size={12} className="text-blue-400 mt-0.5 flex-shrink-0" />}
+              {item.recurrence && <Repeat size={12} className="text-violet-400 mt-0.5 flex-shrink-0" title={`Recurring: ${item.recurrence}`} />}
+              <p className={`text-sm leading-relaxed ${isDone ? 'text-zinc-500 line-through' : 'text-zinc-300'}`}>
+                {displayText}
+                {item.raw_text.length > 120 && (
+                  <button onClick={() => setExpanded(!expanded)} className="ml-1 text-zinc-600 hover:text-zinc-400">
+                    {expanded ? <ChevronUp size={14} className="inline" /> : <ChevronDown size={14} className="inline" />}
+                  </button>
+                )}
+              </p>
+            </div>
             <div className="flex flex-wrap items-center gap-1.5 mt-2">
               {isProcessing && <span className="badge bg-white/5 text-zinc-500 border border-white/10"><Loader2 size={10} className="inline animate-spin mr-1" />classifying</span>}
               {type && <span className={`badge ${TYPE_COLORS[type] || TYPE_COLORS.note}`}>{type.replace('_', ' ')}</span>}
@@ -235,6 +236,7 @@ export default function ItemCard({ item, onUpdate, compact = false, readonly = f
               )}
               <span className="text-xs text-zinc-700 ml-auto">{timeAgo(item.created_at)}</span>
             </div>
+            </>
           )}
 
           {/* Notes thread */}
@@ -268,7 +270,7 @@ export default function ItemCard({ item, onUpdate, compact = false, readonly = f
           </div>
         )}
         {!readonly && !editing && (
-          <div className="flex items-center gap-0.5 md:opacity-0 md:group-hover:opacity-100 transition-all relative">
+          <div className="flex items-center gap-0.5 md:opacity-0 md:group-hover:opacity-100 transition-all absolute top-0 right-0 bg-gradient-to-l from-zinc-900 from-80% to-transparent pl-8 rounded-tr-lg">
             <button onClick={togglePin} className={`mt-0.5 p-1 transition-all ${item.is_pinned ? 'text-blue-400' : 'text-zinc-700 hover:text-zinc-400'}`} title={item.is_pinned ? 'Unpin' : 'Pin'}>
               {item.is_pinned ? <PinOff size={13} /> : <Pin size={13} />}
             </button>

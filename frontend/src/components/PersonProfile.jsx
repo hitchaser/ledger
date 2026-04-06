@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import ItemCard from './ItemCard';
 import DraggableItemList from './DraggableItemList';
+import { useDelayedLoading } from '../hooks/useDelayedLoading';
 import AvatarUpload from './AvatarUpload';
 import PersonTypeahead from './PersonTypeahead';
 import { ArrowLeft, Play, Edit3, Save, Plus, Settings, X, Archive, ArchiveRestore, Trash2, FolderKanban, GitBranch, Merge, Calendar } from 'lucide-react';
@@ -158,10 +159,11 @@ export default function PersonProfile({ refreshKey, onRefresh, itemUpdate }) {
     navigate('/people');
   };
 
-  if (!person) return <div className="p-8 text-zinc-600">Loading...</div>;
+  const showLoading = useDelayedLoading(!person);
+  if (!person) return showLoading ? <div className="p-8 text-zinc-600">Loading...</div> : null;
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-4">
+    <div className="max-w-4xl mx-auto px-4 py-4 page-transition">
       <button onClick={() => navigate('/people')} className="flex items-center gap-1 text-xs text-zinc-600 hover:text-zinc-300 mb-3 transition-colors">
         <ArrowLeft size={14} /> People
       </button>
@@ -186,8 +188,10 @@ export default function PersonProfile({ refreshKey, onRefresh, itemUpdate }) {
             <p className="text-sm text-zinc-600">
               {person.role || 'No role set'} &middot; {({'executive':'Executive','director':'Director','manager':'Manager','ic':'IC'})[person.reporting_level] || person.reporting_level}
               {person.email ? ` · ${person.email}` : ''}
-              {person.manager && <> &middot; Reports to <Link to={`/people/${person.manager.id}`} className="text-blue-400 hover:text-blue-300">{person.manager.display_name}</Link></>}
             </p>
+            {person.manager && (
+              <p className="text-sm text-zinc-600">Reports to <Link to={`/people/${person.manager.id}`} className="text-blue-400 hover:text-blue-300">{person.manager.display_name}</Link></p>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
@@ -210,8 +214,8 @@ export default function PersonProfile({ refreshKey, onRefresh, itemUpdate }) {
             {person.is_archived ? <><ArchiveRestore size={14} /> Restore</> : <><Archive size={14} /> Archive</>}
           </button>
           <button onClick={startMeeting}
-            className="flex items-center gap-1.5 bg-blue-600/80 hover:bg-blue-500 text-white text-sm px-4 py-2 rounded-lg border border-blue-500/20 transition-all whitespace-nowrap">
-            <Play size={14} /> Start Meeting
+            className="flex items-center gap-1.5 bg-blue-600/80 hover:bg-blue-500 text-white text-xs px-3 py-1.5 rounded border border-blue-500/20 transition-all whitespace-nowrap">
+            <Play size={12} /> Start Meeting
           </button>
         </div>
       </div>

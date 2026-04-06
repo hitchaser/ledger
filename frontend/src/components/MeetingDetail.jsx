@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
+import { useDelayedLoading } from '../hooks/useDelayedLoading';
 import ItemCard from './ItemCard';
 import DraggableItemList from './DraggableItemList';
 import PersonTypeahead from './PersonTypeahead';
@@ -167,12 +168,42 @@ export default function MeetingDetail({ refreshKey, onRefresh, itemUpdate }) {
 
   // Handle bullet-point formatting in notes
   const handleNotesKeyDown = (e) => {
+    if (e.key === 'Tab') {
+      const textarea = e.target;
+      const { selectionStart, value } = textarea;
+      const lineStart = value.lastIndexOf('\n', selectionStart - 1) + 1;
+      const currentLine = value.slice(lineStart, selectionStart);
+      const bulletMatch = currentLine.match(/^(\s*)([-*•])\s/);
+      const numberMatchTab = currentLine.match(/^(\s*)(\d+)\.\s/);
+      const listMatch = bulletMatch || numberMatchTab;
+      if (listMatch) {
+        e.preventDefault();
+        let newVal;
+        let newCursor;
+        if (e.shiftKey) {
+          // Outdent: remove up to 2 leading spaces
+          const removeCount = listMatch[1].length >= 2 ? 2 : listMatch[1].length;
+          if (removeCount === 0) return;
+          newVal = value.slice(0, lineStart) + currentLine.slice(removeCount) + value.slice(selectionStart);
+          newCursor = selectionStart - removeCount;
+        } else {
+          // Indent: add 2 spaces at line start
+          newVal = value.slice(0, lineStart) + '  ' + value.slice(lineStart);
+          newCursor = selectionStart + 2;
+        }
+        setNotes(newVal);
+        saveNotes(newVal);
+        setTimeout(() => { textarea.selectionStart = textarea.selectionEnd = newCursor; }, 0);
+        return;
+      }
+    }
     if (e.key === 'Enter') {
       const textarea = e.target;
       const { selectionStart, value } = textarea;
       const lineStart = value.lastIndexOf('\n', selectionStart - 1) + 1;
       const currentLine = value.slice(lineStart, selectionStart);
       const bulletMatch = currentLine.match(/^(\s*)([-*•])\s/);
+      const numberMatch = currentLine.match(/^(\s*)(\d+)\.\s/);
       if (bulletMatch) {
         if (currentLine.trim() === bulletMatch[2]) {
           e.preventDefault();
@@ -190,11 +221,30 @@ export default function MeetingDetail({ refreshKey, onRefresh, itemUpdate }) {
         setNotes(newVal);
         saveNotes(newVal);
         setTimeout(() => { textarea.selectionStart = textarea.selectionEnd = selectionStart + insertion.length; }, 0);
+      } else if (numberMatch) {
+        const num = parseInt(numberMatch[2], 10);
+        // Empty numbered line (just "1.") — clear it
+        if (currentLine.trim() === `${num}.`) {
+          e.preventDefault();
+          const newVal = value.slice(0, lineStart) + '\n' + value.slice(selectionStart);
+          setNotes(newVal);
+          saveNotes(newVal);
+          setTimeout(() => { textarea.selectionStart = textarea.selectionEnd = lineStart + 1; }, 0);
+          return;
+        }
+        e.preventDefault();
+        const indent = numberMatch[1];
+        const insertion = `\n${indent}${num + 1}. `;
+        const newVal = value.slice(0, selectionStart) + insertion + value.slice(selectionStart);
+        setNotes(newVal);
+        saveNotes(newVal);
+        setTimeout(() => { textarea.selectionStart = textarea.selectionEnd = selectionStart + insertion.length; }, 0);
       }
     }
   };
 
-  if (!meeting) return <div className="p-8 text-zinc-600">Loading meeting...</div>;
+  const showLoading = useDelayedLoading(!meeting);
+  if (!meeting) return showLoading ? <div className="p-8 text-zinc-600">Loading meeting...</div> : null;
 
   // Summary modal (shown right after ending)
   if (summary && summary.ai_summary !== undefined && summary.ended_at) {
@@ -231,7 +281,7 @@ export default function MeetingDetail({ refreshKey, onRefresh, itemUpdate }) {
   const metadataSection = (
     <div className="px-4 py-3 border-b border-white/[0.06] space-y-3 flex-shrink-0 bg-white/[0.01]">
       {/* Attendees */}
-      <div>
+      <div className="relative z-20">
         <span className="text-xs text-zinc-600 font-medium uppercase tracking-wide">Attendees</span>
         <div className="mt-1.5">
           <div className="w-56 mb-2">
@@ -258,7 +308,7 @@ export default function MeetingDetail({ refreshKey, onRefresh, itemUpdate }) {
       </div>
 
       {/* Project */}
-      <div>
+      <div className="relative z-10">
         <span className="text-xs text-zinc-600 font-medium uppercase tracking-wide flex items-center gap-1">
           <FolderKanban size={12} /> Project
         </span>
@@ -295,7 +345,7 @@ export default function MeetingDetail({ refreshKey, onRefresh, itemUpdate }) {
   // Ended meeting — editable view
   if (!isActive) {
     return (
-      <div className="flex flex-col h-full">
+      <div className="flex flex-col h-full page-transition">
         {/* Header */}
         <div className="flex items-center gap-3 px-4 py-3 border-b border-white/[0.06] flex-shrink-0">
           <button onClick={() => navigate('/meetings')} className="text-zinc-600 hover:text-zinc-300 transition-colors">
@@ -372,7 +422,7 @@ export default function MeetingDetail({ refreshKey, onRefresh, itemUpdate }) {
 
   // Active meeting — notes-first layout
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full page-transition">
       {/* Header */}
       <div className="flex items-center gap-3 px-4 py-3 border-b border-white/[0.06] flex-shrink-0">
         <input value={title} onChange={handleTitleChange}

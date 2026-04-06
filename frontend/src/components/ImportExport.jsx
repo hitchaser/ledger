@@ -116,7 +116,7 @@ export default function ImportExport() {
   };
 
   return (
-    <div className="max-w-3xl mx-auto px-4 py-4">
+    <div className="max-w-4xl mx-auto px-4 py-4 page-transition">
       <h2 className="text-lg font-semibold text-zinc-200 mb-4">Import / Export</h2>
 
       {/* Org Chart Import */}

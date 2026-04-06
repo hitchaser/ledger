@@ -72,19 +72,29 @@ Live at: **https://ledger.hitchaser.com**
 ## Authentication
 - **Method:** JWT token in httpOnly secure cookie (`ledger_session`)
 - **Session duration:** 24 hours (configurable via SESSION_DURATION_HOURS env var)
-- **Protected:** All /api/ endpoints except /api/auth/login, /api/auth/logout, /api/auth/me, /api/health
+- **Password hashing:** bcrypt via passlib — auto-detects if LEDGER_PASSWORD is already a bcrypt hash ($2b$ prefix)
+- **Rate limiting:** In-memory, 5 failed attempts per IP → 15-minute lockout. Uses X-Forwarded-For (Cloudflare/Caddy) with client.host fallback. Returns 429 with Retry-After header.
+- **TOTP 2FA:** Optional. When enabled, login returns a 5-minute pending token (JWT with `pending_2fa` claim). User must verify TOTP code via /api/auth/verify-totp to get a full session cookie. Pending tokens are rejected by the auth middleware for all non-auth API routes.
+- **TOTP storage:** Secret encrypted with Fernet (key derived from APP_SECRET_KEY via SHA-256) in Settings table (`totp_secret`). Backup codes stored as bcrypt hashes in Settings (`totp_backup_codes`).
+- **Protected:** All /api/ endpoints except /api/auth/* and /api/health
 - **WebSocket:** Also requires valid session cookie (close code 4001 on failure)
-- **Login page:** Obsidian/glass themed, shown automatically when unauthenticated
+- **Login page:** Obsidian/glass themed, two-step flow (password → TOTP if enabled), shown automatically when unauthenticated
 - **Logout:** Sign Out button in sidebar, clears cookie
 - **Frontend 401 handling:** Auto-reloads to trigger login screen on expired sessions
-- **Env vars:** LEDGER_USERNAME, LEDGER_PASSWORD, APP_SECRET_KEY, SESSION_DURATION_HOURS
+- **Env vars:** LEDGER_USERNAME, LEDGER_PASSWORD, APP_SECRET_KEY, SESSION_DURATION_HOURS, TOTP_RESET_TOKEN (optional, for emergency 2FA reset)
 
 ## API Endpoints
 
 ### Auth (no auth required)
-- **POST /api/auth/login** — authenticate, sets session cookie
+- **POST /api/auth/login** — authenticate. If TOTP enabled, returns `{requires_totp: true, pending_token}`. Else sets session cookie. Returns 429 on rate limit.
+- **POST /api/auth/verify-totp** — verify TOTP code or backup code with pending token, sets session cookie
 - **POST /api/auth/logout** — clears session cookie
-- **GET /api/auth/me** — returns current user if authenticated
+- **GET /api/auth/me** — returns current user if authenticated (rejects pending tokens)
+- **GET /api/auth/totp/status** — 2FA status + remaining backup codes (session required)
+- **POST /api/auth/totp/setup** — generate TOTP secret + QR code (session required)
+- **POST /api/auth/totp/setup/confirm** — verify code, enable 2FA, return backup codes (session required)
+- **POST /api/auth/totp/disable** — disable 2FA (requires current TOTP code, session required)
+- **POST /api/auth/totp/reset** — emergency 2FA reset via TOTP_RESET_TOKEN env var (no session)
 
 ### Captures
 - **POST /api/captures** — create capture (parses #hashtag and @mention shortcuts)
@@ -374,4 +384,4 @@ project.json           — Olympus project metadata
 AI settings are stored in the database Settings table (not env vars) and configurable from the Settings page.
 
 ## Dependencies (requirements.txt)
-fastapi 0.115.6, uvicorn 0.34.0, sqlalchemy 2.0.36, psycopg2-binary 2.9.10, httpx 0.28.1, websockets 14.1, python-multipart 0.0.18, PyJWT 2.10.1, python-dateutil 2.9.0
+fastapi 0.115.6, uvicorn 0.34.0, sqlalchemy 2.0.36, psycopg2-binary 2.9.10, httpx 0.28.1, websockets 14.1, python-multipart 0.0.18, PyJWT 2.10.1, python-dateutil 2.9.0, openpyxl 3.1.5, bcrypt 4.2.1, passlib[bcrypt] 1.7.4, pyotp 2.9.0, qrcode[pil] 8.0, cryptography 44.0.0

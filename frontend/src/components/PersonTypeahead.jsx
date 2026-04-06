@@ -24,7 +24,7 @@ export default function PersonTypeahead({ value, onChange, exclude = [], placeho
   const search = (q) => {
     clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(async () => {
-      const r = await api.searchPeople(q, 10);
+      const r = await api.searchPeople(q, 30);
       setResults(r.filter(p => !exclude.includes(p.id)));
       setHighlightIdx(0);
     }, 150);
@@ -114,13 +114,13 @@ export default function PersonTypeahead({ value, onChange, exclude = [], placeho
             <button
               key={p.id}
               onClick={() => handleSelect(p)}
-              className={`w-full flex items-center gap-2 px-3 py-1.5 text-left transition-colors ${
-                idx === highlightIdx ? 'bg-blue-500/15' : 'hover:bg-white/[0.04]'
+              className={`w-full flex items-center gap-2 px-3 py-1.5 text-left text-sm transition-colors ${
+                idx === highlightIdx ? 'bg-blue-500/15 text-zinc-200' : 'text-zinc-300 hover:bg-white/[0.04]'
               }`}
             >
               <Avatar src={p.avatar} name={p.display_name} size="xs" />
               <div className="flex-1 min-w-0">
-                <div className="text-sm text-zinc-200 truncate">{p.display_name}</div>
+                <div className="truncate">{p.display_name}</div>
                 {p.role && <div className="text-xs text-zinc-500 truncate">{p.role}</div>}
               </div>
             </button>
