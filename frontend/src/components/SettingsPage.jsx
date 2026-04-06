@@ -166,6 +166,7 @@ function SecuritySection() {
   const copyBackupCodes = () => {
     navigator.clipboard.writeText(backupCodes.join('\n'));
     setCopied(true);
+    setSavedCodes(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
@@ -196,12 +197,12 @@ function SecuritySection() {
             </button>
             <button
               onClick={finishSetup}
-              disabled={!savedCodes && !copied}
+              disabled={!savedCodes}
               className="flex items-center gap-1 text-xs bg-blue-600/80 hover:bg-blue-500 text-white px-3 py-1.5 rounded border border-blue-500/20 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
             >
               I've saved these
             </button>
-            {!copied && !savedCodes && <span className="text-xs text-zinc-600">Copy codes first</span>}
+            {!savedCodes && <span className="text-xs text-zinc-600">Copy codes first</span>}
           </div>
         </div>
       )}
