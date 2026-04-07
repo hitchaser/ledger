@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import or_
 
 from database import get_db
-from models import CaptureItem, Person, Project, MeetingSession, ProfileLog, CaptureItemPerson, CaptureItemProject, ItemStatus
+from models import CaptureItem, Person, Project, MeetingSession, ProfileLog, LogType, CaptureItemPerson, CaptureItemProject, ItemStatus
 
 router = APIRouter(prefix="/api/timeline", tags=["timeline"])
 
@@ -66,8 +66,12 @@ def get_timeline(
             "items_added": m.items_added,
         })
 
-    # Profile updates
-    logs = db.query(ProfileLog).filter(ProfileLog.created_at >= since).order_by(ProfileLog.created_at.desc()).all()
+    # Profile updates — exclude meeting_summary logs (one per attendee would flood
+    # the timeline; the meeting itself is already rendered as a single event above).
+    logs = db.query(ProfileLog).filter(
+        ProfileLog.created_at >= since,
+        ProfileLog.log_type != LogType.meeting_summary,
+    ).order_by(ProfileLog.created_at.desc()).all()
     for log in logs:
         name = ""
         if log.person_id:
