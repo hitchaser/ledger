@@ -82,7 +82,7 @@ def parse_shortcuts(text: str, db: Session):
                 linked_people.append(person)
                 seen_people_ids.add(person.id)
                 tag = text[pos:pos + 1 + len(dn_lower)]
-                matched_mentions[tag] = True
+                matched_mentions[tag] = person.display_name
                 matched = True
                 break
         if matched:
@@ -96,7 +96,7 @@ def parse_shortcuts(text: str, db: Session):
                 linked_projects.append(proj)
                 seen_project_ids.add(proj.id)
                 tag = text[pos:pos + 1 + len(pn_lower)]
-                matched_mentions[tag] = True
+                matched_mentions[tag] = proj.name
                 break
 
     # Detect leading @mentions: at start of text before any non-mention words
@@ -124,13 +124,13 @@ def parse_shortcuts(text: str, db: Session):
         name = tag[1:]
         clean_text = clean_text.replace(tag, name)
 
-    # For @mentions: leading ones are stripped entirely, non-leading strip @ keep name
-    for tag in matched_mentions:
+    # For @mentions: leading ones are stripped entirely, non-leading strip @ and
+    # restore the original display name (with spaces) for readability.
+    for tag, original_name in matched_mentions.items():
         if tag in leading_mentions:
             clean_text = re.sub(r"\s*" + re.escape(tag) + r"\b", "", clean_text)
         else:
-            name = tag[1:]
-            clean_text = clean_text.replace(tag, name)
+            clean_text = clean_text.replace(tag, original_name)
 
     # Strip @ from any unmatched @mentions
     clean_text = clean_text.replace("@", "")
