@@ -98,7 +98,7 @@ export default function PersonTypeahead({ value, onChange, exclude = [], placeho
   }
 
   return (
-    <div ref={containerRef} className="relative z-50">
+    <div ref={containerRef} className={`relative ${open && results.length > 0 ? 'z-50' : ''}`}>
       <input
         ref={inputRef}
         value={query}

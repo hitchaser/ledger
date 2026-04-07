@@ -68,7 +68,7 @@ export default function ProjectTypeahead({
   }, []);
 
   return (
-    <div ref={containerRef} className="relative z-50 w-56">
+    <div ref={containerRef} className={`relative w-56 ${open && filtered.length > 0 ? 'z-50' : ''}`}>
       <input
         ref={inputRef}
         value={query}
