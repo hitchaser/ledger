@@ -443,10 +443,9 @@ async def import_ics(
     if not content or not content.strip():
         raise HTTPException(
             400,
-            "Outlook handed us an empty .ics file. This is a known Outlook bug — its "
-            "secure temp folder (OLK*) is full. Clear it (regedit → HKCU\\Software\\"
-            "Microsoft\\Office\\16.0\\Outlook\\Security → OutlookSecureTempFolder), "
-            "restart Outlook, and try again."
+            "Outlook handed us an empty .ics file (known drag-and-drop bug). "
+            "Try dragging the meeting to your Desktop first, then drop the file from "
+            "Desktop here. If it keeps failing, fully quit Outlook and reopen."
         )
     parsed = _parse_ics(content)
 

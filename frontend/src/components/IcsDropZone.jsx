@@ -28,7 +28,7 @@ export default function IcsDropZone({ meetingId, currentNotes, compact = false, 
       return;
     }
     if (file.size === 0) {
-      setError("Outlook handed us an empty file (known Outlook bug — OLK temp folder is full). Clear %TEMP%\\OutlookSecureTempFolder, restart Outlook, and try again.");
+      setError("Outlook handed us an empty .ics (known Outlook drag bug). Try dragging the meeting to your Desktop first, then drag from Desktop here — or click this box to pick the file. If it keeps failing, fully quit Outlook (Cmd+Q) and reopen.");
       return;
     }
     setBusy(true);
