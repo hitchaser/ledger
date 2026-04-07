@@ -4,6 +4,7 @@ import { api } from '../api/client';
 import { Link } from 'react-router-dom';
 import Avatar from './Avatar';
 import PersonTypeahead from './PersonTypeahead';
+import ProjectTypeahead from './ProjectTypeahead';
 
 const TYPE_COLORS = {
   followup: 'bg-sky-500/15 text-sky-400 border border-sky-500/20',
@@ -193,6 +194,38 @@ export default function ItemCard({ item, onUpdate, compact = false, readonly = f
                   clearOnSelect
                 />
               </div>
+            </div>
+
+            {/* Projects in edit mode */}
+            <div className="mt-2">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-xs text-zinc-500"><FolderKanban size={11} className="inline mr-0.5" />Projects:</span>
+              </div>
+              {item.linked_projects?.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mb-1">
+                  {item.linked_projects.map(p => (
+                    <div key={p.id} className="badge bg-cyan-500/10 text-cyan-400 border border-cyan-500/15 flex items-center gap-1">
+                      <span>{p.short_code || p.name}</span>
+                      <button
+                        onClick={async () => { await api.unlinkProject(item.id, p.id); onUpdate?.(); }}
+                        className="text-cyan-600 hover:text-cyan-300 ml-0.5"
+                        title="Remove"
+                      >
+                        <X size={10} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <ProjectTypeahead
+                onSelect={async (project) => {
+                  if (!project) return;
+                  await api.linkProject(item.id, project.id);
+                  onUpdate?.();
+                }}
+                exclude={(item.linked_projects || []).map(p => p.id)}
+                placeholder="Add project..."
+              />
             </div>
 
             {/* Predecessors in edit mode */}
