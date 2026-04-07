@@ -362,17 +362,20 @@ def _parse_ics(content: bytes) -> dict:
     return {"title": title, "body": body, "attendees": attendees}
 
 
+def _strip_parens(s: str) -> str:
+    """Remove any `(...)` groups (status notes like '(On Leave)', '(2)', etc.)."""
+    return re.sub(r"\s*\([^)]*\)", "", s or "").strip()
+
+
 def _normalize_cn(cn: str) -> list[str]:
     """Return lowercase candidate name strings for an .ics CN like 'Last, First'.
 
-    Also handles Outlook's `(2)` / `(3)` suffix used to disambiguate duplicate
-    display names — those are stripped before splitting.
+    Strips any trailing `(...)` group (Outlook's duplicate disambiguator `(2)`,
+    or free-form notes like `(On Leave)`) before splitting on the comma.
     """
-    cn = (cn or "").strip()
+    cn = _strip_parens(cn)
     if not cn:
         return []
-    # Strip trailing "(N)" disambiguator (Outlook adds this for duplicate names)
-    cn = re.sub(r"\s*\(\d+\)\s*$", "", cn).strip()
     candidates = [cn]
     if "," in cn:
         last, first = [s.strip() for s in cn.split(",", 1)]
@@ -414,8 +417,15 @@ def _match_attendees(db: Session, attendees: list[dict]) -> tuple[list[Person], 
     name_map: dict[str, Person] = {}
     for p in people:
         for n in {p.name, p.display_name}:
-            if n:
-                name_map.setdefault(n.lower().strip(), p)
+            if not n:
+                continue
+            base = n.lower().strip()
+            name_map.setdefault(base, p)
+            # Also index with parenthetical notes stripped — e.g. Ledger stores
+            # "Bryan Hieber (On Leave)" but .ics CN is "Hieber, Bryan".
+            stripped = _strip_parens(n).lower()
+            if stripped and stripped != base:
+                name_map.setdefault(stripped, p)
 
     matched: list[Person] = []
     seen_ids: set = set()
