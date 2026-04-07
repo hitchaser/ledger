@@ -363,16 +363,43 @@ def _parse_ics(content: bytes) -> dict:
 
 
 def _normalize_cn(cn: str) -> list[str]:
-    """Return lowercase candidate name strings for an .ics CN like 'Last, First'."""
+    """Return lowercase candidate name strings for an .ics CN like 'Last, First'.
+
+    Also handles Outlook's `(2)` / `(3)` suffix used to disambiguate duplicate
+    display names — those are stripped before splitting.
+    """
     cn = (cn or "").strip()
     if not cn:
         return []
+    # Strip trailing "(N)" disambiguator (Outlook adds this for duplicate names)
+    cn = re.sub(r"\s*\(\d+\)\s*$", "", cn).strip()
     candidates = [cn]
     if "," in cn:
         last, first = [s.strip() for s in cn.split(",", 1)]
         if first and last:
             candidates.append(f"{first} {last}")
-    return [c.lower() for c in candidates]
+    return [c.lower() for c in candidates if c]
+
+
+def _name_candidates_from_email(email: str) -> list[str]:
+    """Derive 'first last' / 'last first' candidates from a first.last@domain email.
+
+    Examples:
+        bryan.hieber@covermymeds.com  -> ['bryan hieber', 'hieber bryan']
+        jane.smith2@example.com       -> ['jane smith', 'smith jane']
+        bsmith@example.com            -> []  (single token, no useful split)
+    """
+    if not email or "@" not in email:
+        return []
+    local = email.split("@", 1)[0].strip().lower()
+    # Strip trailing numeric suffix (jane.smith2, jdoe1, etc.)
+    local = re.sub(r"\d+$", "", local)
+    parts = [p for p in re.split(r"[._\-]+", local) if p]
+    if len(parts) < 2:
+        return []
+    first = parts[0]
+    last = parts[-1]
+    return [f"{first} {last}", f"{last} {first}"]
 
 
 def _match_attendees(db: Session, attendees: list[dict]) -> tuple[list[Person], list[dict]]:
@@ -397,10 +424,18 @@ def _match_attendees(db: Session, attendees: list[dict]) -> tuple[list[Person], 
     for att in attendees:
         person = None
         email = (att.get("email") or "").lower().strip()
+        # 1. Email match (primary)
         if email and "@" in email:
             person = email_map.get(email)
+        # 2. CN name match (with (#) suffix stripped, "Last, First" reversal)
         if not person:
             for cand in _normalize_cn(att.get("cn") or ""):
+                person = name_map.get(cand)
+                if person:
+                    break
+        # 3. Email-derived name match (first.last@domain → "first last")
+        if not person and email:
+            for cand in _name_candidates_from_email(email):
                 person = name_map.get(cand)
                 if person:
                     break
