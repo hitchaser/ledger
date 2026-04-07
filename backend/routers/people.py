@@ -91,11 +91,16 @@ def search_people(
     query = db.query(Person).filter(Person.is_archived == False)
     if q:
         term = f"%{q}%"
-        from sqlalchemy import or_
+        # Also try a spaceless match so queries like "JohnS" find "John Smith".
+        q_nospace = q.replace(" ", "")
+        term_nospace = f"%{q_nospace.lower()}%"
+        from sqlalchemy import or_, func
         query = query.filter(or_(
             Person.display_name.ilike(term),
             Person.name.ilike(term),
             Person.role.ilike(term),
+            func.replace(func.lower(Person.display_name), ' ', '').like(term_nospace),
+            func.replace(func.lower(Person.name), ' ', '').like(term_nospace),
         ))
     people = query.order_by(Person.display_name).limit(limit).all()
     return [{"id": p.id, "display_name": p.display_name, "name": p.name, "avatar": p.avatar, "role": p.role} for p in people]

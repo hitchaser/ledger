@@ -16,6 +16,7 @@ export function useMentions() {
   const [mentionResults, setMentionResults] = useState([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const mentionStartPos = useRef(null);
+  const mentionEndPos = useRef(null);
   const mentionPrefix = useRef(null);
   const projectsLoaded = useRef(false);
 
@@ -87,6 +88,7 @@ export function useMentions() {
     }
 
     mentionStartPos.current = triggerIndex;
+    mentionEndPos.current = cursorPos;
     mentionPrefix.current = prefix;
     setMentionQuery(query);
     setSelectedIndex(0);
@@ -103,14 +105,17 @@ export function useMentions() {
 
   const selectMention = useCallback((text, item) => {
     const triggerIndex = mentionStartPos.current;
+    const endPos = mentionEndPos.current ?? text.length;
     const prefix = mentionPrefix.current || '@';
     if (triggerIndex === null) return text;
+    // Replace the entire query range (from @ up to cursor) with the picked name.
+    // Preserve the original name's whitespace ("John Smith"), since the backend
+    // capture parser now handles both spaced and spaceless forms.
     const before = text.slice(0, triggerIndex);
-    const afterTrigger = text.slice(triggerIndex + 1);
-    const spaceIdx = afterTrigger.indexOf(' ');
-    const after = spaceIdx >= 0 ? afterTrigger.slice(spaceIdx) : '';
-    const insertName = item.name.replace(/\s+/g, '');
-    const newText = `${before}${prefix}${insertName}${after ? after : ' '}`;
+    const after = text.slice(endPos);
+    const insertName = item.name;
+    const needsTrailingSpace = !after.startsWith(' ');
+    const newText = `${before}${prefix}${insertName}${needsTrailingSpace ? ' ' : ''}${after}`;
     setMentionQuery(null);
     setMentionResults([]);
     return newText;
