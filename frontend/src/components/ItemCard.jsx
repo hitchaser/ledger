@@ -3,6 +3,7 @@ import { Check, X, Loader2, ChevronDown, ChevronUp, Pencil, Save, Pin, PinOff, C
 import { api } from '../api/client';
 import { Link } from 'react-router-dom';
 import Avatar from './Avatar';
+import PersonTypeahead from './PersonTypeahead';
 
 const TYPE_COLORS = {
   followup: 'bg-sky-500/15 text-sky-400 border border-sky-500/20',
@@ -158,6 +159,42 @@ export default function ItemCard({ item, onUpdate, compact = false, readonly = f
                 {RECURRENCE_OPTIONS.filter(Boolean).map(r => <option key={r} value={r}>{r}</option>)}
               </select>
             </div>
+            {/* People in edit mode */}
+            <div className="mt-2">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-xs text-zinc-500"><User size={11} className="inline mr-0.5" />People:</span>
+              </div>
+              {item.linked_people?.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mb-1">
+                  {item.linked_people.map(p => (
+                    <div key={p.id} className="badge bg-indigo-500/10 text-indigo-400 border border-indigo-500/15 flex items-center gap-1">
+                      <Avatar src={p.avatar} name={p.display_name} size="xs" />
+                      <span>{p.display_name}</span>
+                      <button
+                        onClick={async () => { await api.unlinkPerson(item.id, p.id); onUpdate?.(); }}
+                        className="text-indigo-600 hover:text-indigo-300 ml-0.5"
+                        title="Remove"
+                      >
+                        <X size={10} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div className="w-56">
+                <PersonTypeahead
+                  onChange={async (person) => {
+                    if (!person) return;
+                    await api.linkPerson(item.id, person.id);
+                    onUpdate?.();
+                  }}
+                  exclude={(item.linked_people || []).map(p => p.id)}
+                  placeholder="Add person..."
+                  clearOnSelect
+                />
+              </div>
+            </div>
+
             {/* Predecessors in edit mode */}
             <div className="mt-2">
               <div className="flex items-center gap-2 mb-1">
