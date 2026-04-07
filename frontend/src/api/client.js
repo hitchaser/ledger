@@ -79,6 +79,18 @@ export const api = {
   getActiveMeeting: () => request('/meetings/active'),
   addMeetingAttendee: (meetingId, personId) => request(`/meetings/${meetingId}/attendees/${personId}`, { method: 'POST' }),
   removeMeetingAttendee: (meetingId, personId) => request(`/meetings/${meetingId}/attendees/${personId}`, { method: 'DELETE' }),
+  importIcsToMeeting: async (meetingId, file, currentNotes) => {
+    const form = new FormData();
+    form.append('file', file);
+    if (currentNotes != null) form.append('current_notes', currentNotes);
+    const res = await fetch(`/api/meetings/${meetingId}/import-ics`, { method: 'POST', body: form });
+    if (res.status === 401) { window.location.reload(); throw new Error('Session expired'); }
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.detail || 'Import failed');
+    }
+    return res.json();
+  },
   forceEndActiveMeeting: async () => {
     const active = await request('/meetings/active');
     if (active && active.id) {

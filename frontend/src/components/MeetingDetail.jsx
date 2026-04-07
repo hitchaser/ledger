@@ -1,18 +1,20 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { api } from '../api/client';
 import { useDelayedLoading } from '../hooks/useDelayedLoading';
 import ItemCard from './ItemCard';
 import DraggableItemList from './DraggableItemList';
 import PersonTypeahead from './PersonTypeahead';
+import IcsDropZone from './IcsDropZone';
 import { useMentions } from '../hooks/useMentions';
 import MentionDropdown from './MentionDropdown';
 import Avatar from './Avatar';
-import { Square, Send, Copy, ChevronDown, ChevronUp, X, ArrowLeft, FolderKanban, Trash2 } from 'lucide-react';
+import { Square, Send, Copy, ChevronDown, ChevronUp, X, ArrowLeft, FolderKanban, Trash2, AlertTriangle } from 'lucide-react';
 
 export default function MeetingDetail({ refreshKey, onRefresh, itemUpdate }) {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const [meeting, setMeeting] = useState(null);
   const [title, setTitle] = useState('');
   const [notes, setNotes] = useState('');
@@ -24,8 +26,13 @@ export default function MeetingDetail({ refreshKey, onRefresh, itemUpdate }) {
   const [prep, setPrep] = useState(null);
   const [allProjects, setAllProjects] = useState([]);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [unmatchedAttendees, setUnmatchedAttendees] = useState(
+    location.state?.unmatched || []
+  );
+  const [unmatchedDismissed, setUnmatchedDismissed] = useState(false);
   const notesRef = useRef(null);
   const saveTimerRef = useRef(null);
+  const importInFlightRef = useRef(false);
   const captureInputRef = useRef(null);
   const mentions = useMentions();
   const attendeeTypeaheadRef = useRef(null);
@@ -37,11 +44,11 @@ export default function MeetingDetail({ refreshKey, onRefresh, itemUpdate }) {
     setMeeting(data);
     setTitle(data.title || '');
     setNotes(data.notes || '');
-    // Expand metadata if pre-populated with attendees or project
-    if (data.attendees?.length > 0 || data.project_id) {
+    // Expand metadata if pre-populated with attendees, project, or pending unmatched warnings
+    if (data.attendees?.length > 0 || data.project_id || (location.state?.unmatched?.length > 0)) {
       setMetaOpen(true);
     }
-  }, [id]);
+  }, [id, location.state]);
 
   const loadItems = useCallback(async () => {
     if (!meeting) return;
@@ -92,13 +99,31 @@ export default function MeetingDetail({ refreshKey, onRefresh, itemUpdate }) {
     });
   }, [itemUpdate]);
 
-  // Auto-save notes with debounce
+  // Auto-save notes with debounce (paused while .ics import is in flight)
   const saveNotes = useCallback((value) => {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => {
+      if (importInFlightRef.current) return;
       api.updateMeeting(id, { notes: value }).catch(() => {});
     }, 500);
   }, [id]);
+
+  const handleIcsParsed = (result) => {
+    importInFlightRef.current = false;
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    const m = result.meeting;
+    setMeeting(m);
+    setTitle(m.title || '');
+    setNotes(m.notes || '');
+    setUnmatchedAttendees(result.unmatched || []);
+    setUnmatchedDismissed(false);
+    setMetaOpen(true);
+  };
+
+  const handleIcsBeforeImport = () => {
+    importInFlightRef.current = true;
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+  };
 
   const handleNotesChange = (e) => {
     const val = e.target.value;
@@ -280,6 +305,41 @@ export default function MeetingDetail({ refreshKey, onRefresh, itemUpdate }) {
   // Shared metadata section (used by both active and ended meetings)
   const metadataSection = (
     <div className="px-4 py-3 border-b border-white/[0.06] space-y-3 flex-shrink-0 bg-white/[0.01]">
+      {/* .ics drop zone — active meetings only */}
+      {isActive && (
+        <IcsDropZone
+          compact
+          meetingId={id}
+          currentNotes={notes}
+          onBeforeImport={handleIcsBeforeImport}
+          onParsed={handleIcsParsed}
+        />
+      )}
+
+      {/* Unmatched attendee warning */}
+      {!unmatchedDismissed && unmatchedAttendees.length > 0 && (
+        <div className="rounded-lg border border-amber-500/30 bg-amber-500/[0.07] px-3 py-2 relative">
+          <button
+            onClick={() => setUnmatchedDismissed(true)}
+            className="absolute top-1.5 right-1.5 text-amber-500/60 hover:text-amber-300 transition-colors"
+            title="Dismiss"
+          >
+            <X size={12} />
+          </button>
+          <div className="flex items-center gap-1.5 text-xs font-medium text-amber-300 mb-1">
+            <AlertTriangle size={12} />
+            {unmatchedAttendees.length} attendee{unmatchedAttendees.length === 1 ? '' : 's'} couldn't be matched to a person
+          </div>
+          <ul className="text-xs text-amber-200/80 space-y-0.5 pl-4 list-disc">
+            {unmatchedAttendees.map((u, i) => (
+              <li key={i}>
+                {u.cn || '(no name)'}{u.email ? ` (${u.email})` : ''}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {/* Attendees */}
       <div className="relative z-20">
         <span className="text-xs text-zinc-600 font-medium uppercase tracking-wide">Attendees</span>

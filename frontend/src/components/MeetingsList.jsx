@@ -4,6 +4,7 @@ import { api } from '../api/client';
 import Avatar from './Avatar';
 import { Plus, Play, Radio, Search } from 'lucide-react';
 import { useDelayedLoading } from '../hooks/useDelayedLoading';
+import IcsDropZone from './IcsDropZone';
 
 export default function MeetingsList() {
   const navigate = useNavigate();
@@ -58,6 +59,14 @@ export default function MeetingsList() {
           className="flex items-center gap-1.5 bg-blue-600/80 hover:bg-blue-500 text-white text-xs px-3 py-1.5 rounded border border-blue-500/20 transition-all">
           <Play size={12} /> Start Meeting
         </button>
+      </div>
+
+      <div className="mb-3">
+        <IcsDropZone
+          onParsed={(result) => {
+            navigate(`/meetings/${result.meeting.id}`, { state: { unmatched: result.unmatched } });
+          }}
+        />
       </div>
 
       {meetings.length > 5 && (

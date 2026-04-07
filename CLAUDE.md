@@ -141,7 +141,23 @@ Live at: **https://ledger.hitchaser.com**
 - **POST /api/meetings/:id/attendees/:pid** — add attendee
 - **DELETE /api/meetings/:id/attendees/:pid** — remove attendee
 - **PATCH /api/meetings/:id/end** — end meeting, generates AI summary with notes context, creates ProfileLog per attendee + project
+- **POST /api/meetings/:id/import-ics** — multipart upload of Outlook `.ics` file. Form fields: `file` (the .ics), `current_notes` (optional, the textarea's current value at drop time, used as the merge basis instead of the DB value). Parses SUMMARY/DESCRIPTION/ATTENDEE, strips Teams boilerplate, matches attendees email-first then by CN ("Last, First" reversed to "First Last") against Person.name/display_name, unions matched attendees into the meeting, and merges the parsed body into notes via the stable divider template (see Notes Template below). Returns `{meeting, matched_count, unmatched: [{cn, email}]}`. Title is fully overridden when SUMMARY is present; attendees are union (never removed).
 - **GET /api/meetings/prep/:entity_type/:entity_id** — meeting prep stats (last_meeting date, days_since, new_items, items_resolved, open_items)
+
+### Meeting Notes Template (for .ics import)
+Notes use a stable divider so re-imports are idempotent and manual notes are never lost:
+```
+{cleaned .ics DESCRIPTION}
+
+________________________________
+
+{user's manual notes}
+```
+- Divider: 32 underscores on its own line, with blank lines on each side
+- Detection regex: `\n_{20,}\n` (tolerant of small variants)
+- Empty existing notes → write `{ics_body}\n\n________________________________\n\n`
+- Existing has divider → split on first divider, replace top half with new ics_body, keep bottom half verbatim
+- Existing has no divider → treat all existing as manual notes and prepend the import above the divider
 
 ### Digest
 - **GET /api/digest** �� daily digest with due-date awareness:
@@ -344,6 +360,7 @@ frontend/
       client.js        — API client (all endpoints, 401 auto-reload)
     components/
       Avatar.jsx       — Avatar display component
+      IcsDropZone.jsx  — Reusable drop zone for Outlook .ics files. Props: meetingId (optional — creates new meeting if absent, reusing 409 force-end UX), currentNotes (textarea value sent to server merge), compact (inline vs card variant), onParsed(result), onBeforeImport (e.g. pause autosave). Self-contained loading + error states; never blocks the rest of the page.
       AvatarUpload.jsx — Avatar upload (base64)
       CaptureBox.jsx   — Capture input with @mention/#hashtag autocomplete, search icon
       DailyDigest.jsx  — Digest page (overdue, today, upcoming, no date, stale, orphans)

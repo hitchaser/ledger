@@ -1,13 +1,14 @@
+import re
 from uuid import UUID
 from datetime import datetime, timezone
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form
 from sqlalchemy.orm import Session
 
 from database import get_db
 from models import (
     MeetingSession, MeetingAttendee, CaptureItem, CaptureItemPerson,
-    CaptureItemProject, Person, Project, ProfileLog, LogType, ItemStatus
+    CaptureItemProject, Person, Project, ProfileLog, LogType, ItemStatus, Setting
 )
 from schemas import MeetingCreate, MeetingUpdate, MeetingResponse
 from services.ai_service import generate_meeting_summary
@@ -286,3 +287,183 @@ def end_meeting(meeting_id: UUID, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(session)
     return meeting_to_response(session)
+
+
+# ---------------------------------------------------------------------------
+# .ics import
+# ---------------------------------------------------------------------------
+
+NOTES_DIVIDER = "________________________________"  # 32 underscores
+_DIVIDER_RE = re.compile(r"\n_{20,}\n")
+_TEAMS_BOUNDARY_RE = re.compile(r"\n_{10,}\n")
+
+
+def _parse_ics(content: bytes) -> dict:
+    """Parse an .ics file. Returns {title, body, attendees}."""
+    try:
+        from icalendar import Calendar
+        cal = Calendar.from_ical(content)
+    except Exception as e:
+        raise HTTPException(400, f"Invalid .ics file: {e}")
+
+    event = None
+    for component in cal.walk():
+        if component.name == "VEVENT":
+            event = component
+            break
+    if event is None:
+        raise HTTPException(400, "No event found in .ics")
+
+    def _str(val):
+        if val is None:
+            return ""
+        try:
+            return str(val)
+        except Exception:
+            return ""
+
+    title = _str(event.get("SUMMARY")).strip()
+    description = _str(event.get("DESCRIPTION"))
+
+    # Strip Outlook/Teams boilerplate (join links, dial-in, etc.)
+    body = _TEAMS_BOUNDARY_RE.split(description, maxsplit=1)[0].strip()
+
+    def _attendee_dict(prop):
+        if prop is None:
+            return None
+        cn = ""
+        try:
+            params = getattr(prop, "params", {}) or {}
+            cn = str(params.get("CN", "")).strip()
+        except Exception:
+            cn = ""
+        raw = _str(prop)
+        if raw.lower().startswith("mailto:"):
+            email = raw[7:].strip()
+        else:
+            email = raw.strip()
+        if not cn and not email:
+            return None
+        return {"cn": cn, "email": email}
+
+    attendees: list[dict] = []
+    raw_att = event.get("ATTENDEE")
+    if raw_att is not None:
+        items = raw_att if isinstance(raw_att, list) else [raw_att]
+        for a in items:
+            d = _attendee_dict(a)
+            if d:
+                attendees.append(d)
+
+    organizer = _attendee_dict(event.get("ORGANIZER"))
+    if organizer:
+        attendees.append(organizer)
+
+    return {"title": title, "body": body, "attendees": attendees}
+
+
+def _normalize_cn(cn: str) -> list[str]:
+    """Return lowercase candidate name strings for an .ics CN like 'Last, First'."""
+    cn = (cn or "").strip()
+    if not cn:
+        return []
+    candidates = [cn]
+    if "," in cn:
+        last, first = [s.strip() for s in cn.split(",", 1)]
+        if first and last:
+            candidates.append(f"{first} {last}")
+    return [c.lower() for c in candidates]
+
+
+def _match_attendees(db: Session, attendees: list[dict]) -> tuple[list[Person], list[dict]]:
+    """Match parsed .ics attendees to Person rows. Returns (matched, unmatched)."""
+    people = db.query(Person).filter(Person.is_archived == False).all()  # noqa: E712
+
+    email_map: dict[str, Person] = {}
+    for p in people:
+        if p.email:
+            email_map.setdefault(p.email.lower().strip(), p)
+
+    name_map: dict[str, Person] = {}
+    for p in people:
+        for n in {p.name, p.display_name}:
+            if n:
+                name_map.setdefault(n.lower().strip(), p)
+
+    matched: list[Person] = []
+    seen_ids: set = set()
+    unmatched: list[dict] = []
+
+    for att in attendees:
+        person = None
+        email = (att.get("email") or "").lower().strip()
+        if email and "@" in email:
+            person = email_map.get(email)
+        if not person:
+            for cand in _normalize_cn(att.get("cn") or ""):
+                person = name_map.get(cand)
+                if person:
+                    break
+        if person:
+            if person.id not in seen_ids:
+                matched.append(person)
+                seen_ids.add(person.id)
+        else:
+            unmatched.append({"cn": att.get("cn") or "", "email": att.get("email") or ""})
+
+    return matched, unmatched
+
+
+def _merge_notes(existing: Optional[str], ics_body: str) -> str:
+    """Idempotent merge: place ics_body above the divider, keep manual notes below."""
+    body = (ics_body or "").strip()
+    divider_block = f"\n\n{NOTES_DIVIDER}\n\n"
+    if not existing:
+        return f"{body}{divider_block}"
+    m = _DIVIDER_RE.search(existing)
+    if m:
+        manual = existing[m.end():]
+        return f"{body}{divider_block}{manual}"
+    return f"{body}{divider_block}{existing}"
+
+
+@router.post("/{meeting_id}/import-ics")
+async def import_ics(
+    meeting_id: UUID,
+    file: UploadFile = File(...),
+    current_notes: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+):
+    """Drag-and-drop .ics import: parse, then update title/notes/attendees in place."""
+    session = db.query(MeetingSession).filter(MeetingSession.id == meeting_id).first()
+    if not session:
+        raise HTTPException(404, "Meeting not found")
+
+    content = await file.read()
+    parsed = _parse_ics(content)
+
+    matched, unmatched = _match_attendees(db, parsed["attendees"])
+
+    # Title: full override (only if .ics provided one)
+    if parsed["title"]:
+        session.title = parsed["title"]
+
+    # Notes: smart merge using client-provided current_notes if present
+    base_notes = current_notes if current_notes is not None else session.notes
+    session.notes = _merge_notes(base_notes, parsed["body"])
+
+    # Attendees: union (never remove existing)
+    existing_ids = {a.person_id for a in db.query(MeetingAttendee).filter_by(meeting_id=meeting_id).all()}
+    for person in matched:
+        if person.id not in existing_ids:
+            db.add(MeetingAttendee(meeting_id=meeting_id, person_id=person.id))
+            existing_ids.add(person.id)
+
+    db.commit()
+    db.refresh(session)
+
+    return {
+        "meeting": meeting_to_response(session),
+        "matched_count": len(matched),
+        "unmatched": unmatched,
+    }

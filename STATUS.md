@@ -1,6 +1,27 @@
 # Ledger — Status
 
-## Phase 2c: Auth Hardening — TOTP 2FA + Rate Limiting (2026-04-06)
+## Phase 2d: Outlook .ics Meeting Import (2026-04-06)
+
+### Goal
+Eliminate the OneNote round-trip — let Bryan drag an Outlook meeting (`.ics`) onto Ledger and have title, body, and attendees populate in one drop.
+
+### Backend
+- [x] Added `icalendar==6.1.0` to requirements
+- [x] `POST /api/meetings/{meeting_id}/import-ics` — multipart endpoint accepting `file` + optional `current_notes`
+- [x] `_parse_ics()` — extracts SUMMARY, DESCRIPTION (Teams boilerplate stripped), ATTENDEE list, ORGANIZER
+- [x] `_match_attendees()` — email-first, name-fallback (CN reversal `"Last, First"` → `"First Last"`); single in-memory query for performance
+- [x] `_merge_notes()` — idempotent merge with stable 32-underscore divider; supports re-import without duplicating manual notes
+- [x] Title full-override; attendee union (never removes); response includes matched_count + unmatched list
+
+### Frontend
+- [x] `IcsDropZone.jsx` — reusable drop zone (compact + card variants), click-to-browse fallback, in-zone spinner only (never blocks notes)
+- [x] `api.importIcsToMeeting(meetingId, file, currentNotes)` — FormData POST mirroring org-import pattern
+- [x] MeetingDetail: drop zone in metadata section (active meetings only), wires `currentNotes` from textarea so in-flight typing is preserved server-side
+- [x] MeetingDetail: amber warning panel for unmatched attendees with dismiss; pauses notes auto-save during import
+- [x] MeetingsList: drop zone card above the list; on parse, creates the meeting (reusing 409 force-end UX), navigates to detail with unmatched warning seeded via React Router state
+- [x] MeetingDetail seeds unmatched warning from `location.state` after navigation
+
+
 
 ### Rate Limiting
 - [x] In-memory rate limiter: 5 failed attempts → 15-minute IP lockout
