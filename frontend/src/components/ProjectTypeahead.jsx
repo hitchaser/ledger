@@ -79,7 +79,7 @@ export default function ProjectTypeahead({
         className="w-full glass-input rounded px-3 py-1.5 text-sm text-zinc-200 outline-none"
       />
       {open && query.length > 0 && filtered.length > 0 && (
-        <div className="absolute z-50 top-full left-0 right-0 mt-1 rounded-lg border border-white/10 max-h-48 overflow-y-auto shadow-xl bg-zinc-900/95 backdrop-blur-xl">
+        <div className="absolute z-50 top-full left-0 right-0 mt-1 rounded-lg border border-white/10 max-h-48 overflow-y-auto shadow-xl bg-zinc-900">
           {filtered.map((p, idx) => (
             <button key={p.id} onClick={() => handleSelect(p)}
               className={`w-full text-left px-3 py-1.5 text-sm transition-colors ${
