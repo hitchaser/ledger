@@ -40,14 +40,29 @@ def parse_shortcuts(text: str, db: Session):
 
     # Parse @mentions — match against known people display_names and project names
     # Supports multi-word display names like "John S" by matching longest known name after @
+    # Also indexes the spaceless form ("JohnSmith") because the frontend mention
+    # autocomplete strips whitespace when inserting a picked name.
     people = db.query(Person).filter(Person.is_archived == False).all()
     projects = db.query(Project).filter(Project.is_archived == False).all()
-    people_dn_map = {p.display_name.lower(): p for p in people}  # display_name → Person
+    people_dn_map = {}
+    for p in people:
+        dn = (p.display_name or "").lower()
+        if not dn:
+            continue
+        people_dn_map.setdefault(dn, p)
+        dn_nospace = dn.replace(" ", "")
+        if dn_nospace and dn_nospace != dn:
+            people_dn_map.setdefault(dn_nospace, p)
     project_name_map = {}
     for proj in projects:
-        project_name_map[proj.name.lower()] = proj
+        name_lc = (proj.name or "").lower()
+        if name_lc:
+            project_name_map.setdefault(name_lc, proj)
+            name_nospace = name_lc.replace(" ", "")
+            if name_nospace and name_nospace != name_lc:
+                project_name_map.setdefault(name_nospace, proj)
         if proj.short_code:
-            project_name_map[proj.short_code.lower()] = proj
+            project_name_map.setdefault(proj.short_code.lower(), proj)
 
     # Find all @ positions and try to match known names (longest match first)
     at_positions = [i for i, c in enumerate(text) if c == '@']
