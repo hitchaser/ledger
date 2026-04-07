@@ -38,12 +38,13 @@ export default function MeetingsList() {
       const session = await api.startMeeting({});
       navigate(`/meetings/${session.id}`);
     } catch (e) {
-      if (e.message.includes('409')) {
-        if (confirm('There is an active meeting session. End it and start a new one?')) {
-          await api.forceEndActiveMeeting();
-          const session = await api.startMeeting({});
-          navigate(`/meetings/${session.id}`);
-        }
+      if (e.status === 409 || (e.message && e.message.includes('409'))) {
+        // Auto-end the dangling active meeting — Bryan is never in two at once.
+        await api.forceEndActiveMeeting();
+        const session = await api.startMeeting({});
+        navigate(`/meetings/${session.id}`);
+      } else {
+        throw e;
       }
     }
   };

@@ -32,20 +32,17 @@ export default function IcsDropZone({ meetingId, currentNotes, compact = false, 
       onBeforeImport?.();
       let targetMeetingId = meetingId;
       if (!targetMeetingId) {
-        // Create the meeting first; reuse 409 force-end pattern.
+        // Create the meeting first. If one is already active, auto-end it —
+        // Bryan is never in two meetings at once, so an active session means
+        // the previous one is over.
         try {
           const session = await api.startMeeting({});
           targetMeetingId = session.id;
         } catch (e) {
-          if (e.message && e.message.includes('409')) {
-            if (confirm('There is an active meeting session. End it and start a new one?')) {
-              await api.forceEndActiveMeeting();
-              const session = await api.startMeeting({});
-              targetMeetingId = session.id;
-            } else {
-              setBusy(false);
-              return;
-            }
+          if (e.status === 409 || (e.message && e.message.includes('409'))) {
+            await api.forceEndActiveMeeting();
+            const session = await api.startMeeting({});
+            targetMeetingId = session.id;
           } else {
             throw e;
           }
