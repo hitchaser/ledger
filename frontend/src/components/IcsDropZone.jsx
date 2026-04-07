@@ -27,6 +27,10 @@ export default function IcsDropZone({ meetingId, currentNotes, compact = false, 
       setError('Please drop an .ics file');
       return;
     }
+    if (file.size === 0) {
+      setError("Outlook handed us an empty file (known Outlook bug — OLK temp folder is full). Clear %TEMP%\\OutlookSecureTempFolder, restart Outlook, and try again.");
+      return;
+    }
     setBusy(true);
     try {
       onBeforeImport?.();

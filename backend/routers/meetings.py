@@ -440,6 +440,14 @@ async def import_ics(
         raise HTTPException(404, "Meeting not found")
 
     content = await file.read()
+    if not content or not content.strip():
+        raise HTTPException(
+            400,
+            "Outlook handed us an empty .ics file. This is a known Outlook bug — its "
+            "secure temp folder (OLK*) is full. Clear it (regedit → HKCU\\Software\\"
+            "Microsoft\\Office\\16.0\\Outlook\\Security → OutlookSecureTempFolder), "
+            "restart Outlook, and try again."
+        )
     parsed = _parse_ics(content)
 
     matched, unmatched = _match_attendees(db, parsed["attendees"])
