@@ -81,6 +81,11 @@ def _call_ai(messages: list, model_key: str = "classification_model",
                 "model": model,
                 "messages": messages,
                 "user": "ledger",
+                "metadata": {
+                    "trace_user_id": "ledger",
+                    "tags": ["ledger"],
+                    "generation_name": "ledger-classification",
+                },
             }
             if format_json:
                 body["response_format"] = {"type": "json_object"}
