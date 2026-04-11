@@ -300,6 +300,12 @@ def _strip_html(html: str) -> str:
     text = text.replace('\xa0', ' ')  # non-breaking space
     text = unescape(text)
 
+    # Merge orphaned bullet markers BEFORE line cleanup.
+    # Outlook's <li><div>content</div></li> produces "- \ncontent" after
+    # tag conversion. Must merge before line cleanup strips bare "- " lines.
+    # Match "- " or "  - " followed by whitespace/newlines then content.
+    text = re.sub(r'^(  - |  -|- )[ \t]*\n+(?=\S)', r'\1', text, flags=re.MULTILINE)
+
     # Clean up whitespace within lines, preserving bullet prefixes
     lines = text.split('\n')
     cleaned = []
@@ -318,13 +324,12 @@ def _strip_html(html: str) -> str:
             line = ''
         # Strip redundant bullet chars from bullet content
         # e.g. "- · text" → "- text"
-        line = re.sub(r'^(  )?- [·•\u00b7\u2022 ]+', r'\1- ' if line.startswith('  ') else '- ', line)
+        if line.startswith('  - '):
+            line = '  - ' + line[4:].lstrip('·•\u00b7\u2022 ')
+        elif line.startswith('- '):
+            line = '- ' + line[2:].lstrip('·•\u00b7\u2022 ')
         cleaned.append(line)
     text = '\n'.join(cleaned)
-
-    # Merge orphaned bullet markers with the next non-empty line
-    # e.g. "- \n\ncontent" → "- content" and "  - \n\ncontent" → "  - content"
-    text = re.sub(r'^(  )?- *\n+(?=\S)', lambda m: (m.group(1) or '') + '- ', text, flags=re.MULTILINE)
 
     # Merge bullet continuation lines ending with ":"
     # e.g. "- LOB/Markets:\nvalue" → "- LOB/Markets: value" (only if next isn't a bullet)
