@@ -69,6 +69,11 @@ class LogType(str, enum.Enum):
     manual_note = "manual_note"
 
 
+class NoteSourceType(str, enum.Enum):
+    manual = "manual"
+    email = "email"
+
+
 # ── Junction Tables ──
 
 class PersonProject(Base):
@@ -95,6 +100,18 @@ class MeetingAttendee(Base):
     __tablename__ = "meeting_attendees"
     meeting_id = Column(UUID(as_uuid=True), ForeignKey("meeting_sessions.id", ondelete="CASCADE"), primary_key=True)
     person_id = Column(UUID(as_uuid=True), ForeignKey("people.id", ondelete="CASCADE"), primary_key=True)
+
+
+class NotePerson(Base):
+    __tablename__ = "note_people"
+    note_id = Column(UUID(as_uuid=True), ForeignKey("notes.id", ondelete="CASCADE"), primary_key=True)
+    person_id = Column(UUID(as_uuid=True), ForeignKey("people.id", ondelete="CASCADE"), primary_key=True)
+
+
+class NoteProject(Base):
+    __tablename__ = "note_projects"
+    note_id = Column(UUID(as_uuid=True), ForeignKey("notes.id", ondelete="CASCADE"), primary_key=True)
+    project_id = Column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), primary_key=True)
 
 
 # ── Core Models ──
@@ -211,6 +228,26 @@ class MeetingSession(Base):
     project = relationship("Project", foreign_keys=[project_id])
     attendees = relationship("Person", secondary="meeting_attendees", backref="attended_meetings")
     capture_items = relationship("CaptureItem", backref="meeting_session")
+
+
+class Note(Base):
+    __tablename__ = "notes"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    title = Column(Text, nullable=True)
+    body = Column(Text, nullable=False)
+    source_type = Column(Enum(NoteSourceType), default=NoteSourceType.manual)
+    created_at = Column(DateTime(timezone=True), default=utcnow)
+    updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+    email_from = Column(Text, nullable=True)
+    email_to = Column(Text, nullable=True)
+    email_cc = Column(Text, nullable=True)
+    email_bcc = Column(Text, nullable=True)
+    email_date = Column(DateTime(timezone=True), nullable=True)
+    email_message_id = Column(Text, nullable=True)
+
+    linked_people = relationship("Person", secondary="note_people", backref="notes_linked")
+    linked_projects = relationship("Project", secondary="note_projects", backref="notes_linked")
 
 
 class ProfileLog(Base):

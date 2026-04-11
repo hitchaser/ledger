@@ -1,5 +1,37 @@
 # Ledger — Status
 
+## Phase 3: Notes Tab — Deployed (2026-04-11)
+
+### Goal
+General-purpose capture layer for IMs, emails, and phone calls — things that need to be written down, tagged with people/projects, and searched later. Includes .eml drag-and-drop import for saving emails as notes.
+
+### Data Model
+- [x] `Note` model: title, body, source_type (manual|email), email_* fields, linked_people, linked_projects
+- [x] `NotePerson` / `NoteProject` junction tables (same pattern as MeetingAttendee)
+- [x] `NoteSourceType` enum (manual, email)
+- [x] Inline migration in main.py (idempotent table creation)
+
+### Backend
+- [x] `routers/notes.py` — full CRUD: list (with filters), create, get, update, delete
+- [x] Person/project link/unlink endpoints (POST/DELETE)
+- [x] `.eml` import endpoint: parses email headers + body, dedup by Message-ID, auto-tags people by email address
+- [x] `services/people_matcher.py` — shared service extracted from meetings.py (email, CN, name-from-email matching)
+- [x] `meetings.py` updated to import from people_matcher (no behavior change)
+- [x] `search.py` updated with notes section (searches title + body)
+
+### Frontend
+- [x] `EmlDropZone.jsx` — drag-and-drop .eml import (modeled on IcsDropZone)
+- [x] `NotesList.jsx` — list page with source filter (All/Notes/Emails), client-side search, .eml drop zone
+- [x] `NoteDetail.jsx` — create/edit with auto-save (500ms debounce), PersonTypeahead + ProjectTypeahead tagging, email metadata display
+- [x] `Sidebar.jsx` — Notes nav link (StickyNote icon) after Meetings
+- [x] `App.jsx` — routes: /notes, /notes/new, /notes/:id
+- [x] `QuickSearch.jsx` — notes section in search results (StickyNote/Mail icons)
+- [x] `PersonProfile.jsx` — "Recent Notes" section (fetches by person_id)
+- [x] `ProjectCard.jsx` — "Recent Notes" section (fetches by project_id)
+- [x] `client.js` — 11 notes API methods (listNotes, createNote, getNote, updateNote, deleteNote, link/unlink person/project, importEml)
+
+---
+
 ## Phase 2d: Outlook .ics Meeting Import (2026-04-06)
 
 ### Goal

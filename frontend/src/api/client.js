@@ -99,6 +99,31 @@ export const api = {
     return null;
   },
 
+  // Notes
+  listNotes: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return request(`/notes${qs ? '?' + qs : ''}`);
+  },
+  createNote: (data) => request('/notes', { method: 'POST', body: JSON.stringify(data) }),
+  getNote: (id) => request(`/notes/${id}`),
+  updateNote: (id, data) => request(`/notes/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deleteNote: (id) => request(`/notes/${id}`, { method: 'DELETE' }),
+  linkNotePerson: (noteId, personId) => request(`/notes/${noteId}/link-person/${personId}`, { method: 'POST' }),
+  unlinkNotePerson: (noteId, personId) => request(`/notes/${noteId}/link-person/${personId}`, { method: 'DELETE' }),
+  linkNoteProject: (noteId, projectId) => request(`/notes/${noteId}/link-project/${projectId}`, { method: 'POST' }),
+  unlinkNoteProject: (noteId, projectId) => request(`/notes/${noteId}/link-project/${projectId}`, { method: 'DELETE' }),
+  importEml: async (file) => {
+    const form = new FormData();
+    form.append('file', file);
+    const res = await fetch('/api/notes/import-eml', { method: 'POST', body: form });
+    if (res.status === 401) { window.location.reload(); throw new Error('Session expired'); }
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.detail || 'Import failed');
+    }
+    return res.json();
+  },
+
   // Item Notes
   addNote: (itemId, content) => request(`/captures/${itemId}/notes`, { method: 'POST', body: JSON.stringify({ content }) }),
   deleteNote: (itemId, noteId) => request(`/captures/${itemId}/notes/${noteId}`, { method: 'DELETE' }),

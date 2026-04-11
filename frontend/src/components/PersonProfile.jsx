@@ -6,7 +6,7 @@ import DraggableItemList from './DraggableItemList';
 import { useDelayedLoading } from '../hooks/useDelayedLoading';
 import AvatarUpload from './AvatarUpload';
 import PersonTypeahead from './PersonTypeahead';
-import { ArrowLeft, Play, Edit3, Save, Plus, Settings, X, Archive, ArchiveRestore, Trash2, FolderKanban, GitBranch, Merge, Calendar } from 'lucide-react';
+import { ArrowLeft, Play, Edit3, Save, Plus, Settings, X, Archive, ArchiveRestore, Trash2, FolderKanban, GitBranch, Merge, Calendar, StickyNote, Mail } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 const DEFAULT_PROFILE = {
@@ -50,6 +50,7 @@ export default function PersonProfile({ refreshKey, onRefresh, itemUpdate }) {
   const [availableProjects, setAvailableProjects] = useState([]);
   const [showAddProject, setShowAddProject] = useState(false);
   const [pastMeetings, setPastMeetings] = useState([]);
+  const [recentNotes, setRecentNotes] = useState([]);
 
   useEffect(() => {
     api.getPerson(id).then(p => {
@@ -63,6 +64,7 @@ export default function PersonProfile({ refreshKey, onRefresh, itemUpdate }) {
     api.listPeople({ limit: 5000 }).then(r => setAllPeople(r.people || r));
     api.listProjects().then(setAvailableProjects);
     api.listMeetings({ person_id: id, limit: 10 }).then(r => setPastMeetings(r.meetings || [])).catch(() => {});
+    api.listNotes({ person_id: id, limit: 10 }).then(r => setRecentNotes(r.notes || [])).catch(() => {});
   }, [id, refreshKey]);
 
   // Merge WebSocket item updates into local state
@@ -421,6 +423,29 @@ export default function PersonProfile({ refreshKey, onRefresh, itemUpdate }) {
                 <span className="text-sm text-zinc-300 truncate flex-1">{m.title || 'Untitled Meeting'}</span>
                 <span className="text-xs text-zinc-600 flex-shrink-0">{new Date(m.started_at).toLocaleDateString()}</span>
                 {!m.ended_at && <span className="text-xs text-emerald-400">Active</span>}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Recent Notes */}
+      {recentNotes.length > 0 && (
+        <div className="mb-4 p-3 glass rounded-lg">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs text-zinc-500 font-medium uppercase tracking-wide flex items-center gap-1"><StickyNote size={12} /> Recent Notes</span>
+            <button onClick={() => navigate('/notes')} className="text-xs text-zinc-600 hover:text-zinc-300 transition-colors">View All</button>
+          </div>
+          <div className="flex flex-col gap-1">
+            {recentNotes.slice(0, 5).map(n => (
+              <button key={n.id} onClick={() => navigate(`/notes/${n.id}`)}
+                className="w-full flex items-center gap-2 px-2 py-1.5 rounded hover:bg-white/[0.04] transition-colors text-left">
+                {n.source_type === 'email'
+                  ? <Mail size={12} className="text-amber-400/60 flex-shrink-0" />
+                  : <StickyNote size={12} className="text-blue-400/60 flex-shrink-0" />
+                }
+                <span className="text-sm text-zinc-300 truncate flex-1">{n.title || (n.body || '').slice(0, 40)}</span>
+                <span className="text-xs text-zinc-600 flex-shrink-0">{new Date(n.created_at).toLocaleDateString()}</span>
               </button>
             ))}
           </div>

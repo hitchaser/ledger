@@ -362,101 +362,12 @@ def _parse_ics(content: bytes) -> dict:
     return {"title": title, "body": body, "attendees": attendees}
 
 
-def _strip_parens(s: str) -> str:
-    """Remove any `(...)` groups (status notes like '(On Leave)', '(2)', etc.)."""
-    return re.sub(r"\s*\([^)]*\)", "", s or "").strip()
-
-
-def _normalize_cn(cn: str) -> list[str]:
-    """Return lowercase candidate name strings for an .ics CN like 'Last, First'.
-
-    Strips any trailing `(...)` group (Outlook's duplicate disambiguator `(2)`,
-    or free-form notes like `(On Leave)`) before splitting on the comma.
-    """
-    cn = _strip_parens(cn)
-    if not cn:
-        return []
-    candidates = [cn]
-    if "," in cn:
-        last, first = [s.strip() for s in cn.split(",", 1)]
-        if first and last:
-            candidates.append(f"{first} {last}")
-    return [c.lower() for c in candidates if c]
-
-
-def _name_candidates_from_email(email: str) -> list[str]:
-    """Derive 'first last' / 'last first' candidates from a first.last@domain email.
-
-    Examples:
-        bryan.hieber@covermymeds.com  -> ['bryan hieber', 'hieber bryan']
-        jane.smith2@example.com       -> ['jane smith', 'smith jane']
-        bsmith@example.com            -> []  (single token, no useful split)
-    """
-    if not email or "@" not in email:
-        return []
-    local = email.split("@", 1)[0].strip().lower()
-    # Strip trailing numeric suffix (jane.smith2, jdoe1, etc.)
-    local = re.sub(r"\d+$", "", local)
-    parts = [p for p in re.split(r"[._\-]+", local) if p]
-    if len(parts) < 2:
-        return []
-    first = parts[0]
-    last = parts[-1]
-    return [f"{first} {last}", f"{last} {first}"]
-
-
-def _match_attendees(db: Session, attendees: list[dict]) -> tuple[list[Person], list[dict]]:
-    """Match parsed .ics attendees to Person rows. Returns (matched, unmatched)."""
-    people = db.query(Person).filter(Person.is_archived == False).all()  # noqa: E712
-
-    email_map: dict[str, Person] = {}
-    for p in people:
-        if p.email:
-            email_map.setdefault(p.email.lower().strip(), p)
-
-    name_map: dict[str, Person] = {}
-    for p in people:
-        for n in {p.name, p.display_name}:
-            if not n:
-                continue
-            base = n.lower().strip()
-            name_map.setdefault(base, p)
-            # Also index with parenthetical notes stripped — e.g. Ledger stores
-            # "Bryan Hieber (On Leave)" but .ics CN is "Hieber, Bryan".
-            stripped = _strip_parens(n).lower()
-            if stripped and stripped != base:
-                name_map.setdefault(stripped, p)
-
-    matched: list[Person] = []
-    seen_ids: set = set()
-    unmatched: list[dict] = []
-
-    for att in attendees:
-        person = None
-        email = (att.get("email") or "").lower().strip()
-        # 1. Email match (primary)
-        if email and "@" in email:
-            person = email_map.get(email)
-        # 2. CN name match (with (#) suffix stripped, "Last, First" reversal)
-        if not person:
-            for cand in _normalize_cn(att.get("cn") or ""):
-                person = name_map.get(cand)
-                if person:
-                    break
-        # 3. Email-derived name match (first.last@domain → "first last")
-        if not person and email:
-            for cand in _name_candidates_from_email(email):
-                person = name_map.get(cand)
-                if person:
-                    break
-        if person:
-            if person.id not in seen_ids:
-                matched.append(person)
-                seen_ids.add(person.id)
-        else:
-            unmatched.append({"cn": att.get("cn") or "", "email": att.get("email") or ""})
-
-    return matched, unmatched
+from services.people_matcher import (
+    strip_parens as _strip_parens,
+    normalize_cn as _normalize_cn,
+    name_candidates_from_email as _name_candidates_from_email,
+    match_attendees as _match_attendees,
+)
 
 
 def _merge_notes(existing: Optional[str], ics_body: str) -> str:

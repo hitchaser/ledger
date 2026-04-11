@@ -45,6 +45,16 @@ Live at: **https://ledger.hitchaser.com**
 
 **MeetingAttendee** — junction table for meeting-to-person many-to-many (meeting_id, person_id).
 
+**Note** — general-purpose capture (manual notes + imported emails).
+- Fields: title (nullable), body, source_type (NoteSourceType enum: manual|email), created_at, updated_at
+- Email fields: email_from, email_to, email_cc, email_bcc, email_date, email_message_id
+- Relations: linked_people (many-to-many via NotePerson), linked_projects (many-to-many via NoteProject)
+- Dedup: email imports check email_message_id for existing notes
+
+**NotePerson** — junction table for note-to-person many-to-many (note_id, person_id).
+
+**NoteProject** — junction table for note-to-project many-to-many (note_id, project_id).
+
 **ProfileLog** — timestamped history entries (meeting summaries, profile updates, manual notes).
 
 **ItemNote** — threaded notes/comments on a capture item.
@@ -65,6 +75,7 @@ Live at: **https://ledger.hitchaser.com**
 - Urgency: today, this_week, this_month, someday (DEPRECATED — no longer used in AI or UI, kept in DB)
 - ItemStatus: open, done, dismissed
 - ReportingLevel: executive, manager, ic (legacy: director, employee, peer, other — kept in DB enum but migrated)
+- NoteSourceType: manual, email
 - ProjectStatus: active, on_hold, complete, cancelled
 - LinkSource: ai, manual, hashtag
 - LogType: meeting_summary, profile_update, manual_note
@@ -159,6 +170,16 @@ ________________________________
 - Existing has divider → split on first divider, replace top half with new ics_body, keep bottom half verbatim
 - Existing has no divider → treat all existing as manual notes and prepend the import above the divider
 
+### Notes
+- **GET /api/notes** — list notes (pagination: limit, offset; filters: person_id, project_id, source_type, search; returns {notes: [], total: N})
+- **POST /api/notes** — create manual note (body: {title, body, person_ids[], project_ids[]})
+- **GET /api/notes/:id** — get note with linked people/projects
+- **PATCH /api/notes/:id** — update title and/or body
+- **DELETE /api/notes/:id** — hard delete (cascade removes junction rows)
+- **POST/DELETE /api/notes/:id/link-person/:pid** — manage person links
+- **POST/DELETE /api/notes/:id/link-project/:pid** — manage project links
+- **POST /api/notes/import-eml** — multipart upload of `.eml` file. Parses From/To/CC/BCC/Subject/Date/Message-ID headers, extracts body (prefers text/plain, falls back to stripped HTML). Dedup by email_message_id. Auto-tags people by matching email addresses against Person.email using shared people_matcher service. Returns `{note, matched_count, unmatched: [{cn, email}]}`.
+
 ### Digest
 - **GET /api/digest** �� daily digest with due-date awareness:
   - overdue_items: due_date in past
@@ -169,7 +190,7 @@ ________________________________
   - orphaned_items: open, no person or project links
 
 ### Search
-- **GET /api/search?q=** — universal search across items (raw_text + note content), people (name, display_name, role, email), projects (name, short_code, context_notes), meetings (title, notes). Min 2 chars. Returns categorized results.
+- **GET /api/search?q=** — universal search across items (raw_text + note content), people (name, display_name, role, email), projects (name, short_code, context_notes), meetings (title, notes), notes (title, body). Min 2 chars. Returns categorized results.
 
 ### Timeline
 - **GET /api/timeline?days=N** — activity timeline for past N days. Events: item_created, item_resolved, meeting, profile_update, meeting_summary. Includes summary stats.
@@ -246,6 +267,9 @@ ________________________________
 | /meetings | MeetingsList | Meeting list with search, new meeting button |
 | /meetings/:id | MeetingDetail | Notes-first meeting view with attendees, capture |
 | /meeting/:type/:id | MeetingMode | Legacy redirect — creates meeting → navigates to /meetings/:id |
+| /notes | NotesList | Notes list with source filter, search, .eml drop zone |
+| /notes/new | NoteDetail | Create new note |
+| /notes/:id | NoteDetail | View/edit note with auto-save, person/project tagging |
 | /digest | DailyDigest | Daily digest with overdue/today/upcoming/this_week sections |
 | /timeline | Timeline | Activity timeline (configurable days) |
 | /settings | SettingsPage | AI provider config, theme toggle |
@@ -254,7 +278,10 @@ ________________________________
 - **CaptureBox** — always visible at top, @mention and #hashtag autocomplete dropdowns (MentionDropdown), search icon to open QuickSearch
 - **Sidebar** — collapsible navigation, mobile responsive hamburger menu, sign out button
 - **ItemCard** — rich item display: pin/star, due dates, type/urgency badges, editable text, notes thread, predecessor links, person/project chips
-- **QuickSearch** — universal search modal (Cmd/Ctrl+K), searches items, notes, people, projects
+- **QuickSearch** — universal search modal (Cmd/Ctrl+K), searches items, notes, people, projects, meetings, notes
+- **NotesList** — notes list page with source filter (All/Notes/Emails), .eml drop zone, client-side search
+- **NoteDetail** — note editor with auto-save (500ms debounce), PersonTypeahead/ProjectTypeahead tagging, email metadata display
+- **EmlDropZone** — drag-and-drop .eml import (modeled on IcsDropZone), calls api.importEml
 - **MentionDropdown** — autocomplete dropdown for @person and #project in capture box (useMentions hook)
 - **Avatar / AvatarUpload** — headshot display and upload (base64)
 - **Toast** — notification toasts (auto-resolve alerts, etc.)
@@ -317,6 +344,17 @@ ________________________________
 - End meeting generates summary including notes context, creates ProfileLog per attendee + project
 - One active session at a time (409 on conflict)
 
+## Notes (General-Purpose Capture + Email Import)
+- **Notes tab** in sidebar — lists all notes reverse chronological, with source type icons (StickyNote/Mail), linked people avatars, project badges
+- **Source filter**: All | Notes | Emails toggle to filter by source_type
+- **New Note button** — creates note, navigates to /notes/new which auto-creates on first meaningful edit
+- **Note Detail page** (/notes/:id) — title input + large body textarea with 500ms debounce auto-save, PersonTypeahead + ProjectTypeahead tagging with clearOnSelect
+- **Email-sourced notes**: collapsible metadata header showing From/To/CC/BCC/Date (read-only)
+- **.eml import**: EmlDropZone on NotesList page for drag-and-drop. Parses with Python email stdlib, extracts headers + body (text/plain preferred, HTML stripped as fallback). Dedup by Message-ID. Auto-tags people by matching email addresses against Person.email.
+- **Cross-entity**: PersonProfile and ProjectCard show "Recent Notes" sections (same pattern as "Recent Meetings")
+- **Search integration**: note titles and bodies searchable via universal search (QuickSearch)
+- **Shared people_matcher service**: `services/people_matcher.py` extracted from meetings.py — both .ics and .eml import use the same attendee/email matching logic
+
 ## Archive/Restore/Delete Flow
 - **People:** archive (is_archived=true) → can restore (is_archived=false) → delete (must be archived first, removes junction links and logs)
 - **Projects:** auto-archive on status=complete/cancelled, auto-unarchive on status=active/on_hold → delete (must be archived first)
@@ -343,13 +381,15 @@ backend/
     captures.py        — CRUD captures, notes, predecessors, hashtag/mention parsing
     people.py          — CRUD people, person-project links, items, logs
     projects.py        — CRUD projects, project-person links, items, logs, auto-archive
-    meetings.py        — Meeting lifecycle, prep stats, AI summary
+    meetings.py        — Meeting lifecycle, prep stats, AI summary, .ics import (uses people_matcher)
+    notes.py           — Notes CRUD, .eml import, person/project linking
     digest.py          — Daily digest with due-date-aware queries
-    search.py          — Universal search (items, notes, people, projects)
+    search.py          — Universal search (items, notes, people, projects, meetings, notes)
     timeline.py        — Activity timeline
     settings.py        — Settings CRUD with defaults and cache
   services/
     ai_service.py      — AI abstraction (LiteLLM + Ollama), classify_capture, parse_profile_update, generate_meeting_summary, settings cache
+    people_matcher.py  — Shared people-matching service (email, CN, name-from-email matching) — used by meetings.py and notes.py
 
 frontend/
   src/
@@ -372,6 +412,9 @@ frontend/
       MeetingDetail.jsx — Notes-first meeting view (active + read-only ended)
       MeetingMode.jsx  — Legacy redirect: creates meeting → navigates to /meetings/:id
       MeetingsList.jsx — Meeting list page with new meeting button
+      NotesList.jsx    — Notes list page with source filter, search, .eml drop zone
+      NoteDetail.jsx   — Note detail/editor with auto-save, person/project tagging, email metadata
+      EmlDropZone.jsx  — Drag-and-drop .eml import (modeled on IcsDropZone)
       MentionDropdown.jsx — Autocomplete dropdown for @mentions and #hashtags
       PeopleDirectory.jsx — People list with search and archive toggle
       PersonProfile.jsx — Person detail (structured profile, avatar, items, logs, projects)

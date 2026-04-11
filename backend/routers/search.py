@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import or_
 
 from database import get_db
-from models import CaptureItem, Person, Project, ItemNote, MeetingSession
+from models import CaptureItem, Person, Project, ItemNote, MeetingSession, Note
 
 router = APIRouter(prefix="/api/search", tags=["search"])
 
@@ -11,7 +11,7 @@ router = APIRouter(prefix="/api/search", tags=["search"])
 @router.get("")
 def universal_search(q: str = Query(""), db: Session = Depends(get_db)):
     if not q or len(q.strip()) < 2:
-        return {"people": [], "projects": [], "items": [], "meetings": []}
+        return {"people": [], "projects": [], "items": [], "meetings": [], "notes": []}
 
     query = q.strip().lower()
     ql = f"%{query}%"
@@ -107,4 +107,31 @@ def universal_search(q: str = Query(""), db: Session = Depends(get_db)):
             "matching_notes": matching_notes,
         })
 
-    return {"people": people, "projects": projects, "items": items[:20], "meetings": meetings}
+    # Search notes — title and body
+    from sqlalchemy import or_ as _or
+    notes_q = db.query(Note).filter(
+        _or(
+            Note.title.ilike(ql),
+            Note.body.ilike(ql),
+        )
+    ).order_by(Note.created_at.desc()).limit(8).all()
+
+    notes_results = []
+    for n in notes_q:
+        matching_body = None
+        if n.body and query in n.body.lower():
+            idx = n.body.lower().index(query)
+            start = max(0, idx - 30)
+            end = min(len(n.body), idx + len(query) + 50)
+            matching_body = ("..." if start > 0 else "") + n.body[start:end] + ("..." if end < len(n.body) else "")
+        notes_results.append({
+            "id": str(n.id),
+            "title": n.title,
+            "source_type": n.source_type.value if n.source_type else "manual",
+            "created_at": n.created_at.isoformat(),
+            "matching_body": matching_body,
+            "linked_people": [{"id": p.id, "display_name": p.display_name} for p in n.linked_people],
+            "linked_projects": [{"id": p.id, "name": p.name, "short_code": p.short_code} for p in n.linked_projects],
+        })
+
+    return {"people": people, "projects": projects, "items": items[:20], "meetings": meetings, "notes": notes_results}

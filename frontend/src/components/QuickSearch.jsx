@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
-import { Search, X, CheckCircle, Circle, MessageSquare, User, FolderKanban, Calendar } from 'lucide-react';
+import { Search, X, CheckCircle, Circle, MessageSquare, User, FolderKanban, Calendar, StickyNote, Mail } from 'lucide-react';
 import Avatar from './Avatar';
 
 const TYPE_COLORS = {
@@ -15,7 +15,7 @@ const TYPE_COLORS = {
 
 export default function QuickSearch({ onClose }) {
   const [query, setQuery] = useState('');
-  const [results, setResults] = useState({ people: [], projects: [], items: [], meetings: [] });
+  const [results, setResults] = useState({ people: [], projects: [], items: [], meetings: [], notes: [] });
   const [loading, setLoading] = useState(false);
   const inputRef = useRef(null);
   const navigate = useNavigate();
@@ -24,7 +24,7 @@ export default function QuickSearch({ onClose }) {
 
   useEffect(() => {
     if (!query.trim() || query.trim().length < 2) {
-      setResults({ people: [], projects: [], items: [], meetings: [] });
+      setResults({ people: [], projects: [], items: [], meetings: [], notes: [] });
       return;
     }
     setLoading(true);
@@ -40,7 +40,7 @@ export default function QuickSearch({ onClose }) {
 
   const go = (path) => { navigate(path); onClose(); };
 
-  const hasResults = results.people.length > 0 || results.projects.length > 0 || results.items.length > 0 || results.meetings?.length > 0;
+  const hasResults = results.people.length > 0 || results.projects.length > 0 || results.items.length > 0 || results.meetings?.length > 0 || results.notes?.length > 0;
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-start justify-center pt-[12vh] z-50 px-4" onClick={onClose}>
@@ -120,6 +120,40 @@ export default function QuickSearch({ onClose }) {
                     <div className="flex items-center gap-1 mt-0.5">
                       <MessageSquare size={10} className="text-zinc-600" />
                       <span className="text-xs text-zinc-500 italic">{m.matching_notes}</span>
+                    </div>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Notes */}
+          {results.notes?.length > 0 && (
+            <div className="mb-2">
+              <div className="flex items-center gap-1.5 px-2 py-1">
+                <StickyNote size={12} className="text-amber-400" />
+                <span className="text-xs text-zinc-500 font-medium uppercase tracking-wide">Notes</span>
+              </div>
+              {results.notes.map(n => (
+                <button key={n.id} onClick={() => go(`/notes/${n.id}`)}
+                  className="w-full text-left px-3 py-2 rounded hover:bg-white/[0.05] transition-colors">
+                  <div className="flex items-center gap-2">
+                    {n.source_type === 'email'
+                      ? <Mail size={12} className="text-amber-400/60 flex-shrink-0" />
+                      : <StickyNote size={12} className="text-blue-400/60 flex-shrink-0" />
+                    }
+                    <span className="text-sm text-zinc-300 font-medium">{n.title || '(untitled)'}</span>
+                    <span className="text-xs text-zinc-600">{new Date(n.created_at).toLocaleDateString()}</span>
+                    {n.linked_people?.length > 0 && (
+                      <span className="text-xs text-indigo-400/60">{n.linked_people.map(p => p.display_name).join(', ')}</span>
+                    )}
+                    {n.linked_projects?.length > 0 && (
+                      <span className="text-xs text-cyan-400/60">{n.linked_projects.map(p => p.short_code || p.name).join(', ')}</span>
+                    )}
+                  </div>
+                  {n.matching_body && (
+                    <div className="flex items-center gap-1 mt-0.5">
+                      <span className="text-xs text-zinc-500 italic">{n.matching_body}</span>
                     </div>
                   )}
                 </button>

@@ -193,3 +193,35 @@ class DigestResponse(BaseModel):
     this_week_items: List[CaptureResponse] = []
     stale_people: List[PersonRef] = []
     orphaned_items: List[CaptureResponse] = []
+
+
+# ── Note ──
+
+class NoteCreate(BaseModel):
+    title: Optional[str] = None
+    body: str
+    person_ids: List[UUID] = []
+    project_ids: List[UUID] = []
+
+class NoteUpdate(BaseModel):
+    title: Optional[str] = None
+    body: Optional[str] = None
+
+class NoteResponse(BaseModel):
+    id: UUID
+    title: Optional[str] = None
+    body: str
+    source_type: str
+    created_at: datetime
+    updated_at: datetime
+    email_from: Optional[str] = None
+    email_to: Optional[str] = None
+    email_cc: Optional[str] = None
+    email_bcc: Optional[str] = None
+    email_date: Optional[datetime] = None
+    email_message_id: Optional[str] = None
+    linked_people: List[PersonRef] = []
+    linked_projects: List[ProjectRef] = []
+
+    class Config:
+        from_attributes = True

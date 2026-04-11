@@ -118,6 +118,56 @@ if "meeting_attendees" not in _insp.get_table_names():
     _db.close()
     logger.info("Migrated person_id data to meeting_attendees")
 
+# Migration: notes tables
+try:
+    with engine.begin() as conn:
+        conn.execute(sa_text("CREATE TYPE notesourcetype AS ENUM ('manual', 'email')"))
+    logger.info("Created notesourcetype enum")
+except Exception:
+    pass  # Already exists
+
+if "notes" not in _insp.get_table_names():
+    with engine.begin() as conn:
+        conn.execute(sa_text("""
+            CREATE TABLE notes (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                title TEXT,
+                body TEXT NOT NULL,
+                source_type notesourcetype DEFAULT 'manual',
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                updated_at TIMESTAMPTZ DEFAULT NOW(),
+                email_from TEXT,
+                email_to TEXT,
+                email_cc TEXT,
+                email_bcc TEXT,
+                email_date TIMESTAMPTZ,
+                email_message_id TEXT
+            )
+        """))
+    logger.info("Created notes table")
+
+if "note_people" not in _insp.get_table_names():
+    with engine.begin() as conn:
+        conn.execute(sa_text("""
+            CREATE TABLE note_people (
+                note_id UUID REFERENCES notes(id) ON DELETE CASCADE,
+                person_id UUID REFERENCES people(id) ON DELETE CASCADE,
+                PRIMARY KEY (note_id, person_id)
+            )
+        """))
+    logger.info("Created note_people table")
+
+if "note_projects" not in _insp.get_table_names():
+    with engine.begin() as conn:
+        conn.execute(sa_text("""
+            CREATE TABLE note_projects (
+                note_id UUID REFERENCES notes(id) ON DELETE CASCADE,
+                project_id UUID REFERENCES projects(id) ON DELETE CASCADE,
+                PRIMARY KEY (note_id, project_id)
+            )
+        """))
+    logger.info("Created note_projects table")
+
 
 # ── WebSocket Manager ──
 
@@ -470,6 +520,7 @@ from routers.timeline import router as timeline_router
 from routers.search import router as search_router
 from routers.importexport import router as importexport_router
 from routers.orgchart import router as orgchart_router
+from routers.notes import router as notes_router
 
 app.include_router(auth_router)
 app.include_router(captures_router)
@@ -482,6 +533,7 @@ app.include_router(timeline_router)
 app.include_router(search_router)
 app.include_router(importexport_router)
 app.include_router(orgchart_router)
+app.include_router(notes_router)
 
 
 # ── WebSocket (auth-protected) ──
