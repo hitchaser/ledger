@@ -200,6 +200,17 @@ def _extract_email_addresses(header_value: str) -> list[dict]:
     return [{"name": name, "email": addr} for name, addr in pairs if addr]
 
 
+def _clean_plain_text(text: str) -> str:
+    """Clean up Outlook-generated plain text (used as fallback when no HTML)."""
+    # Remove <mailto:...> artifacts: "display<mailto:actual>" → "display"
+    text = re.sub(r'<mailto:[^>]+>', '', text)
+    # Clean up "  *\n" bullet patterns → just the content
+    text = re.sub(r'\n\s+\*\s*\n', '\n', text)
+    # Collapse multiple blank lines
+    text = re.sub(r'\n{3,}', '\n\n', text)
+    return text.strip()
+
+
 def _strip_html(html: str) -> str:
     """Convert Outlook-style HTML email to clean plain text."""
     from html import unescape
@@ -318,24 +329,27 @@ async def import_eml(
                 "deduplicated": True,
             }
 
-    # Extract body
+    # Extract body — prefer HTML (our _strip_html produces cleaner output
+    # than Outlook's auto-generated text/plain which has mangled bullets
+    # and raw <mailto:> artifacts)
     body_text = ""
+    plain_text = ""
+    html_text = ""
     if msg.is_multipart():
         for part in msg.walk():
             ct = part.get_content_type()
-            if ct == "text/plain":
+            if ct == "text/html" and not html_text:
                 payload = part.get_content()
                 if isinstance(payload, str):
-                    body_text = payload
-                    break
-        if not body_text:
-            for part in msg.walk():
-                ct = part.get_content_type()
-                if ct == "text/html":
-                    payload = part.get_content()
-                    if isinstance(payload, str):
-                        body_text = _strip_html(payload)
-                        break
+                    html_text = payload
+            elif ct == "text/plain" and not plain_text:
+                payload = part.get_content()
+                if isinstance(payload, str):
+                    plain_text = payload
+        if html_text:
+            body_text = _strip_html(html_text)
+        elif plain_text:
+            body_text = _clean_plain_text(plain_text)
     else:
         ct = msg.get_content_type()
         payload = msg.get_content()
@@ -343,7 +357,7 @@ async def import_eml(
             if ct == "text/html":
                 body_text = _strip_html(payload)
             else:
-                body_text = payload
+                body_text = _clean_plain_text(payload)
 
     if not body_text:
         body_text = "(no body content)"
