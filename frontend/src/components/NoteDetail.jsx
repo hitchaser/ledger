@@ -115,7 +115,12 @@ export default function NoteDetail() {
 
   const handleDelete = async () => {
     if (!note?.id) return;
-    await api.deleteNote(note.id);
+    // Cancel any pending auto-save timers so they don't fire on a deleted note
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    if (saveTitleRef.current) clearTimeout(saveTitleRef.current);
+    try {
+      await api.deleteNote(note.id);
+    } catch {}
     navigate('/notes');
   };
 
