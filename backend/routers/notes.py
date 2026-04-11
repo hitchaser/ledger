@@ -234,12 +234,12 @@ def _strip_html(html: str) -> str:
     text = re.sub(r'</td>', '', text, flags=re.IGNORECASE)
     text = re.sub(r'<hr[^>]*/?>', '\n', text, flags=re.IGNORECASE)
 
-    # Convert list items: <li> → newline + text (no bullet — Outlook wraps
-    # the content in nested spans, and the bullet is usually a &bull; or
-    # Wingdings symbol that we strip anyway)
-    text = re.sub(r'<li[^>]*>', '\n', text, flags=re.IGNORECASE)
+    # Convert list items: <li> → "- " prefix (Outlook wraps content in
+    # nested spans with &bull; or Wingdings bullets — we add our own clean dash)
+    text = re.sub(r'<li[^>]*>', '\n- ', text, flags=re.IGNORECASE)
     text = re.sub(r'</li>', '', text, flags=re.IGNORECASE)
-    text = re.sub(r'</?(?:ul|ol)[^>]*>', '\n', text, flags=re.IGNORECASE)
+    # Remove list wrappers without adding extra newlines
+    text = re.sub(r'</?(?:ul|ol)[^>]*>', '', text, flags=re.IGNORECASE)
 
     # Convert <a href="mailto:x">display</a> → display
     # But if display text == email or contains "mailto:", just show the email
@@ -269,15 +269,19 @@ def _strip_html(html: str) -> str:
     text = text.replace('\xa0', ' ')  # non-breaking space
     text = unescape(text)
 
-    # Clean up bullet characters that Outlook sometimes uses
-    text = text.replace('·', '').replace('•', '').replace('\u00b7', '')
-
     # Clean up whitespace within lines (preserve newlines)
     lines = text.split('\n')
     cleaned = []
     for line in lines:
         # Collapse runs of spaces/tabs to single space, strip edges
         line = re.sub(r'[ \t]+', ' ', line).strip()
+        # Strip redundant bullet chars from list items we already prefixed with "- "
+        # e.g. "- · Launch Day..." → "- Launch Day..."
+        if line.startswith('- '):
+            line = '- ' + line[2:].lstrip('·•\u00b7\u2022 ')
+        else:
+            # Standalone bullet chars on non-list lines — remove them
+            line = line.lstrip('·•\u00b7\u2022 ') if line in ('·', '•', '\u00b7', '\u2022') else line
         cleaned.append(line)
     text = '\n'.join(cleaned)
 
