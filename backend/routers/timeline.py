@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import or_
 
 from database import get_db
-from models import CaptureItem, Person, Project, MeetingSession, ProfileLog, LogType, CaptureItemPerson, CaptureItemProject, ItemStatus
+from models import CaptureItem, Person, Project, MeetingSession, ProfileLog, LogType, CaptureItemPerson, CaptureItemProject, ItemStatus, Note
 
 router = APIRouter(prefix="/api/timeline", tags=["timeline"])
 
@@ -88,14 +88,52 @@ def get_timeline(
             "text": f"{name}: {log.content}",
         })
 
+    # Notes created
+    notes_created = db.query(Note).filter(Note.created_at >= since).order_by(Note.created_at.desc()).all()
+    for n in notes_created:
+        is_email = n.source_type and n.source_type.value == "email"
+        title = n.title or (n.body[:60] + "..." if n.body and len(n.body) > 60 else n.body or "")
+        label = "Email imported" if is_email else "Note added"
+        people = [{"id": p.id, "display_name": p.display_name, "name": p.name} for p in (n.linked_people or [])]
+        projects = [{"id": p.id, "name": p.name, "short_code": p.short_code} for p in (n.linked_projects or [])]
+        events.append({
+            "type": "note_created",
+            "timestamp": n.created_at.isoformat(),
+            "text": f"{label}: {title}",
+            "note_id": str(n.id),
+            "source_type": n.source_type.value if n.source_type else "manual",
+            "people": people,
+            "projects": projects,
+        })
+
+    # Notes updated (only if updated_at differs from created_at by > 60s)
+    notes_updated = db.query(Note).filter(
+        Note.updated_at >= since,
+        Note.updated_at > Note.created_at + timedelta(seconds=60),
+    ).order_by(Note.updated_at.desc()).all()
+    for n in notes_updated:
+        # Skip if already covered by note_created in this window
+        if n.created_at >= since:
+            continue
+        title = n.title or (n.body[:60] + "..." if n.body and len(n.body) > 60 else n.body or "")
+        events.append({
+            "type": "note_updated",
+            "timestamp": n.updated_at.isoformat(),
+            "text": f"Note updated: {title}",
+            "note_id": str(n.id),
+            "source_type": n.source_type.value if n.source_type else "manual",
+        })
+
     # Sort all events by timestamp descending
     events.sort(key=lambda e: e["timestamp"], reverse=True)
 
     # Summary stats
+    notes_count = len([e for e in events if e["type"] in ("note_created", "note_updated")])
     stats = {
         "items_created": len([e for e in events if e["type"] == "item_created"]),
         "items_resolved": len([e for e in events if e["type"] == "item_resolved"]),
         "meetings_held": len([e for e in events if e["type"] == "meeting"]),
+        "notes": notes_count,
     }
 
     return {"events": events[:100], "stats": stats, "days": days}

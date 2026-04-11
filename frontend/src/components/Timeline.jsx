@@ -1,7 +1,7 @@
 import { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
-import { Clock, CheckCircle, Users, FileText, MessageSquare, ChevronDown, ChevronUp } from 'lucide-react';
+import { Clock, CheckCircle, Users, FileText, MessageSquare, ChevronDown, ChevronUp, StickyNote, Mail } from 'lucide-react';
 import { useDelayedLoading } from '../hooks/useDelayedLoading';
 
 const EVENT_ICONS = {
@@ -10,6 +10,8 @@ const EVENT_ICONS = {
   meeting: { icon: Users, color: 'text-violet-400' },
   meeting_summary: { icon: MessageSquare, color: 'text-cyan-400' },
   profile_update: { icon: FileText, color: 'text-pink-400' },
+  note_created: { icon: StickyNote, color: 'text-amber-400' },
+  note_updated: { icon: StickyNote, color: 'text-amber-400/60' },
 };
 
 function formatDate(iso) {
@@ -95,7 +97,7 @@ export default function Timeline() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-3 mb-4">
+      <div className="grid grid-cols-4 gap-3 mb-4">
         <div className="glass rounded-lg p-3 text-center">
           <div className="text-2xl font-bold text-zinc-200">{data.stats.items_created}</div>
           <div className="text-xs text-zinc-500">Items Created</div>
@@ -108,6 +110,10 @@ export default function Timeline() {
           <div className="text-2xl font-bold text-zinc-200">{data.stats.meetings_held}</div>
           <div className="text-xs text-zinc-500">Meetings</div>
         </div>
+        <div className="glass rounded-lg p-3 text-center">
+          <div className="text-2xl font-bold text-zinc-200">{data.stats.notes || 0}</div>
+          <div className="text-xs text-zinc-500">Notes</div>
+        </div>
       </div>
 
       {/* Event list */}
@@ -116,13 +122,19 @@ export default function Timeline() {
           <h3 className="text-xs text-zinc-500 font-medium uppercase tracking-wide mb-2">{date}</h3>
           <div className="flex flex-col gap-1">
             {events.map((e, i) => {
-              const cfg = EVENT_ICONS[e.type] || EVENT_ICONS.item_created;
+              const isNote = e.type === 'note_created' || e.type === 'note_updated';
+              const isEmailNote = isNote && e.source_type === 'email';
+              const cfg = isEmailNote ? { icon: Mail, color: 'text-amber-400' } : (EVENT_ICONS[e.type] || EVENT_ICONS.item_created);
               const Icon = cfg.icon;
               const isMeeting = e.type === 'meeting';
+              const isClickable = isMeeting || isNote;
+              const handleClick = isMeeting && e.meeting_id ? () => navigate(`/meetings/${e.meeting_id}`)
+                : isNote && e.note_id ? () => navigate(`/notes/${e.note_id}`)
+                : undefined;
               return (
                 <div key={i}
-                  className={`flex items-start gap-3 glass rounded-lg px-3 py-2 ${isMeeting ? 'cursor-pointer hover:bg-white/[0.04]' : ''}`}
-                  onClick={isMeeting && e.meeting_id ? () => navigate(`/meetings/${e.meeting_id}`) : undefined}>
+                  className={`flex items-start gap-3 glass rounded-lg px-3 py-2 ${isClickable ? 'cursor-pointer hover:bg-white/[0.04]' : ''}`}
+                  onClick={handleClick}>
                   <Icon size={14} className={`mt-0.5 flex-shrink-0 ${cfg.color}`} />
                   <div className="flex-1 min-w-0">
                     <ClampedText text={e.text} eventKey={`${date}-${i}`} />
