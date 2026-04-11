@@ -236,12 +236,50 @@ def _strip_html(html: str) -> str:
     text = re.sub(r'</td>', '', text, flags=re.IGNORECASE)
     text = re.sub(r'<hr[^>]*/?>', '\n', text, flags=re.IGNORECASE)
 
-    # Convert list items: <li> → "- " prefix (Outlook wraps content in
-    # nested spans with &bull; or Wingdings bullets — we add our own clean dash)
-    text = re.sub(r'<li[^>]*>', '\n- ', text, flags=re.IGNORECASE)
-    text = re.sub(r'</li>', '', text, flags=re.IGNORECASE)
-    # Remove list wrappers without adding extra newlines
-    text = re.sub(r'</?(?:ul|ol)[^>]*>', '', text, flags=re.IGNORECASE)
+    # Convert list items with nesting awareness. Outlook uses nested <ul><li>
+    # for everything — top-level items are field labels (no bullet needed),
+    # nested items are sub-values (indented with "  " prefix).
+    # Process by tracking <ul>/<ol> depth and replacing tags with markers.
+    list_depth = 0
+    result_chars = []
+    i = 0
+    text_lower = text.lower()
+    while i < len(text):
+        # Check for list open/close tags and list items
+        if text[i] == '<':
+            tag_end = text.find('>', i)
+            if tag_end == -1:
+                result_chars.append(text[i])
+                i += 1
+                continue
+            tag_content = text[i:tag_end + 1]
+            tag_lower = tag_content.lower()
+            if re.match(r'<(?:ul|ol)[\s>]', tag_lower):
+                list_depth += 1
+                i = tag_end + 1
+                continue
+            elif re.match(r'</(?:ul|ol)>', tag_lower):
+                list_depth = max(0, list_depth - 1)
+                i = tag_end + 1
+                continue
+            elif re.match(r'<li[\s>]', tag_lower):
+                if list_depth >= 2:
+                    result_chars.append('\n  ')  # indented sub-item
+                else:
+                    result_chars.append('\n')  # top-level item, no bullet
+                i = tag_end + 1
+                continue
+            elif tag_lower == '</li>':
+                i = tag_end + 1
+                continue
+            else:
+                result_chars.append(tag_content)
+                i = tag_end + 1
+                continue
+        else:
+            result_chars.append(text[i])
+            i += 1
+    text = ''.join(result_chars)
 
     # Convert <a href="mailto:x">display</a> → display
     # But if display text == email or contains "mailto:", just show the email
@@ -275,27 +313,31 @@ def _strip_html(html: str) -> str:
     lines = text.split('\n')
     cleaned = []
     for line in lines:
+        # Preserve leading "  " indent for sub-items, strip the rest
+        is_indented = line.startswith('  ')
         line = re.sub(r'[ \t]+', ' ', line).strip()
         # Strip standalone bullet chars left over from Outlook formatting
         if line in ('·', '•', '\u00b7', '\u2022'):
             line = ''
+        # Re-add indent for sub-items
+        if is_indented and line:
+            line = '  ' + line
         cleaned.append(line)
     text = '\n'.join(cleaned)
 
-    # Merge orphaned bullet markers with the next non-empty line.
-    # Outlook's <li><p>content</p></li> can produce "- \n\ncontent"
-    text = re.sub(r'^- *\n+(?=\S)', '- ', text, flags=re.MULTILINE)
+    # Merge orphaned list content. Outlook's <li><p>content</p></li> can
+    # produce an empty marker line followed by the content on the next line.
+    # For indented sub-items: "  \n\ncontent" → "  content"
+    text = re.sub(r'^(  ) *\n+(?=\S)', r'\1', text, flags=re.MULTILINE)
 
-    # Strip redundant bullet chars from start of bullet content
-    # e.g. "- · Launch Day" → "- Launch Day"
-    text = re.sub(r'^- [·•\u00b7\u2022 ]+', '- ', text, flags=re.MULTILINE)
+    # Strip redundant bullet chars from start of content
+    # e.g. "  · Medicaid" → "  Medicaid", or standalone "· text" → "text"
+    text = re.sub(r'^(  )[·•\u00b7\u2022 ]+', r'\1', text, flags=re.MULTILINE)
 
-    # Merge bullet continuation lines. Outlook splits bullet content across
-    # inner <p> tags, producing "- LOB/Markets:\nMedicaid" when the content
-    # should be one line. Merge any non-bullet, non-empty line that follows
-    # a bullet line ending with ":" or a bullet line where the next line
-    # doesn't look like a new sentence/section.
-    text = re.sub(r'^(- [^\n]*:)\n(?!- |\n)(.+)', r'\1 \2', text, flags=re.MULTILINE)
+    # Merge continuation lines after items ending with ":"
+    # e.g. "LOB/Markets:\nMedicaid" → "LOB/Markets: Medicaid" (when not followed by sub-items)
+    # But NOT when next line is indented (it's a sub-item list)
+    text = re.sub(r'^([^\n]*:)\n(?!  |\n)(.+)', r'\1 \2', text, flags=re.MULTILINE)
 
     # Normalize spacing. Outlook's nested <p><span><br></span></p> structures
     # produce a blank line between every single line. Strategy:
@@ -303,23 +345,24 @@ def _strip_html(html: str) -> str:
     # 2. Re-insert paragraph breaks (blank lines) at section boundaries
     text = re.sub(r'\n{2,}', '\n', text)
 
-    # Now re-insert blank lines at natural paragraph boundaries:
-    # - Before a line that doesn't start with "- " after a "- " line (end of list)
-    # - After a line that precedes a "- " line but isn't itself a "- " line (start of list)
-    # - Before greeting closings (Best, Thanks, Regards, etc.)
-    # - Before/after the confidentiality notice
+    # Now re-insert blank lines at natural paragraph boundaries.
+    # A "list line" is any line starting with "  " (indented sub-item) or
+    # a line that's part of a list block (preceded by or following indented lines).
+    def _is_list_line(ln):
+        return ln.startswith('  ')
+
     lines = text.split('\n')
     result = []
     for i, line in enumerate(lines):
         prev = lines[i - 1] if i > 0 else ''
-        # Insert blank line at list boundary transitions
-        if line.startswith('- ') and prev and not prev.startswith('- '):
-            result.append('')
-        elif not line.startswith('- ') and prev.startswith('- ') and line:
+        nxt = lines[i + 1] if i + 1 < len(lines) else ''
+        # Insert blank line when transitioning out of a list block
+        if _is_list_line(prev) and not _is_list_line(line) and line:
             result.append('')
         # Insert blank line before common email closings
         elif line.rstrip(',') in ('Best', 'Thanks', 'Regards', 'Thank you', 'Sincerely', 'Cheers'):
-            result.append('')
+            if prev:
+                result.append('')
         result.append(line)
     text = '\n'.join(result)
 
