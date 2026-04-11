@@ -271,24 +271,52 @@ def _strip_html(html: str) -> str:
     text = text.replace('\xa0', ' ')  # non-breaking space
     text = unescape(text)
 
-    # Clean up whitespace within lines (preserve newlines)
+    # Clean up whitespace within lines
     lines = text.split('\n')
     cleaned = []
     for line in lines:
-        # Collapse runs of spaces/tabs to single space, strip edges
         line = re.sub(r'[ \t]+', ' ', line).strip()
-        # Strip redundant bullet chars (Outlook puts these inside <li> content)
-        line = line.lstrip('·•\u00b7\u2022 ') if line in ('·', '•', '\u00b7', '\u2022') else line
+        # Strip standalone bullet chars left over from Outlook formatting
+        if line in ('·', '•', '\u00b7', '\u2022'):
+            line = ''
         cleaned.append(line)
     text = '\n'.join(cleaned)
 
     # Merge orphaned bullet markers with the next non-empty line.
-    # Outlook's <li><p>content</p></li> produces "- \n\ncontent" after
-    # our tag conversion. Collapse "- " followed by blank lines + content
-    # into a single "- content" line.
+    # Outlook's <li><p>content</p></li> can produce "- \n\ncontent"
     text = re.sub(r'^- *\n+(?=\S)', '- ', text, flags=re.MULTILINE)
 
-    # Collapse 3+ consecutive blank lines to 2
+    # Strip redundant bullet chars from start of bullet content
+    # e.g. "- · Launch Day" → "- Launch Day"
+    text = re.sub(r'^- [·•\u00b7\u2022 ]+', '- ', text, flags=re.MULTILINE)
+
+    # Normalize spacing. Outlook's nested <p><span><br></span></p> structures
+    # produce a blank line between every single line. Strategy:
+    # 1. Collapse all runs of blank lines to a single \n (no blank line)
+    # 2. Re-insert paragraph breaks (blank lines) at section boundaries
+    text = re.sub(r'\n{2,}', '\n', text)
+
+    # Now re-insert blank lines at natural paragraph boundaries:
+    # - Before a line that doesn't start with "- " after a "- " line (end of list)
+    # - After a line that precedes a "- " line but isn't itself a "- " line (start of list)
+    # - Before greeting closings (Best, Thanks, Regards, etc.)
+    # - Before/after the confidentiality notice
+    lines = text.split('\n')
+    result = []
+    for i, line in enumerate(lines):
+        prev = lines[i - 1] if i > 0 else ''
+        # Insert blank line at list boundary transitions
+        if line.startswith('- ') and prev and not prev.startswith('- '):
+            result.append('')
+        elif not line.startswith('- ') and prev.startswith('- ') and line:
+            result.append('')
+        # Insert blank line before common email closings
+        elif line.rstrip(',') in ('Best', 'Thanks', 'Regards', 'Thank you', 'Sincerely', 'Cheers'):
+            result.append('')
+        result.append(line)
+    text = '\n'.join(result)
+
+    # Collapse any accidentally created triple+ newlines
     text = re.sub(r'\n{3,}', '\n\n', text)
 
     return text.strip()
