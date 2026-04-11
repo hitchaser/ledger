@@ -227,8 +227,10 @@ def _strip_html(html: str) -> str:
     # Convert <br> to newline
     text = re.sub(r'<br\s*/?>', '\n', text, flags=re.IGNORECASE)
 
-    # Convert block elements to newlines
-    text = re.sub(r'</?(?:p|div|tr|h[1-6])[^>]*>', '\n', text, flags=re.IGNORECASE)
+    # Convert block elements to newlines — only opening tags get a newline;
+    # closing tags are stripped silently to avoid double-spacing from <p>x</p>
+    text = re.sub(r'<(?:p|div|tr|h[1-6])[^>]*>', '\n', text, flags=re.IGNORECASE)
+    text = re.sub(r'</(?:p|div|tr|h[1-6])>', '', text, flags=re.IGNORECASE)
     text = re.sub(r'</?(?:table|thead|tbody)[^>]*>', '\n', text, flags=re.IGNORECASE)
     text = re.sub(r'<td[^>]*>', ' ', text, flags=re.IGNORECASE)
     text = re.sub(r'</td>', '', text, flags=re.IGNORECASE)
