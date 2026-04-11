@@ -201,15 +201,78 @@ def _extract_email_addresses(header_value: str) -> list[dict]:
 
 
 def _strip_html(html: str) -> str:
-    """Basic HTML tag stripping."""
-    text = re.sub(r'<br\s*/?>', '\n', html, flags=re.IGNORECASE)
-    text = re.sub(r'<p[^>]*>', '\n', text, flags=re.IGNORECASE)
-    text = re.sub(r'</p>', '', text, flags=re.IGNORECASE)
+    """Convert Outlook-style HTML email to clean plain text."""
+    from html import unescape
+
+    text = html
+
+    # Normalize line endings
+    text = text.replace('\r\n', '\n').replace('\r', '\n')
+
+    # Remove <head>...</head> and <style>...</style> blocks entirely
+    text = re.sub(r'<head[^>]*>.*?</head>', '', text, flags=re.IGNORECASE | re.DOTALL)
+    text = re.sub(r'<style[^>]*>.*?</style>', '', text, flags=re.IGNORECASE | re.DOTALL)
+
+    # Convert <br> to newline
+    text = re.sub(r'<br\s*/?>', '\n', text, flags=re.IGNORECASE)
+
+    # Convert block elements to newlines
+    text = re.sub(r'</?(?:p|div|tr|h[1-6])[^>]*>', '\n', text, flags=re.IGNORECASE)
+    text = re.sub(r'</?(?:table|thead|tbody)[^>]*>', '\n', text, flags=re.IGNORECASE)
+    text = re.sub(r'<td[^>]*>', ' ', text, flags=re.IGNORECASE)
+    text = re.sub(r'</td>', '', text, flags=re.IGNORECASE)
+    text = re.sub(r'<hr[^>]*/?>', '\n', text, flags=re.IGNORECASE)
+
+    # Convert list items: <li> → newline + text (no bullet — Outlook wraps
+    # the content in nested spans, and the bullet is usually a &bull; or
+    # Wingdings symbol that we strip anyway)
+    text = re.sub(r'<li[^>]*>', '\n', text, flags=re.IGNORECASE)
+    text = re.sub(r'</li>', '', text, flags=re.IGNORECASE)
+    text = re.sub(r'</?(?:ul|ol)[^>]*>', '\n', text, flags=re.IGNORECASE)
+
+    # Convert <a href="mailto:x">display</a> → display
+    # But if display text == email or contains "mailto:", just show the email
+    def _clean_mailto(m):
+        href = m.group(1) or ""
+        display = m.group(2) or ""
+        email_addr = href.replace("mailto:", "").strip()
+        display_clean = display.strip()
+        # If display is another mailto link or same as email, just return email
+        if "mailto:" in display_clean:
+            return email_addr
+        if display_clean.lower() == email_addr.lower():
+            return email_addr
+        if display_clean:
+            return display_clean
+        return email_addr
+
+    text = re.sub(
+        r'<a\s[^>]*href=["\']([^"\']*)["\'][^>]*>(.*?)</a>',
+        _clean_mailto, text, flags=re.IGNORECASE | re.DOTALL
+    )
+
+    # Strip all remaining HTML tags
     text = re.sub(r'<[^>]+>', '', text)
-    # Decode common HTML entities
-    text = text.replace('&nbsp;', ' ').replace('&amp;', '&').replace('&lt;', '<').replace('&gt;', '>').replace('&quot;', '"')
-    # Collapse multiple blank lines
+
+    # Decode HTML entities (&nbsp;, &amp;, &#8226;, etc.)
+    text = text.replace('\xa0', ' ')  # non-breaking space
+    text = unescape(text)
+
+    # Clean up bullet characters that Outlook sometimes uses
+    text = text.replace('·', '').replace('•', '').replace('\u00b7', '')
+
+    # Clean up whitespace within lines (preserve newlines)
+    lines = text.split('\n')
+    cleaned = []
+    for line in lines:
+        # Collapse runs of spaces/tabs to single space, strip edges
+        line = re.sub(r'[ \t]+', ' ', line).strip()
+        cleaned.append(line)
+    text = '\n'.join(cleaned)
+
+    # Collapse 3+ consecutive blank lines to 2
     text = re.sub(r'\n{3,}', '\n\n', text)
+
     return text.strip()
 
 
