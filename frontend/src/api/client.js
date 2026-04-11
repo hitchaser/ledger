@@ -124,9 +124,9 @@ export const api = {
     return res.json();
   },
 
-  // Item Notes
+  // Item Notes (comments on capture items)
   addNote: (itemId, content) => request(`/captures/${itemId}/notes`, { method: 'POST', body: JSON.stringify({ content }) }),
-  deleteNote: (itemId, noteId) => request(`/captures/${itemId}/notes/${noteId}`, { method: 'DELETE' }),
+  deleteItemNote: (itemId, noteId) => request(`/captures/${itemId}/notes/${noteId}`, { method: 'DELETE' }),
 
   // Predecessors
   addPredecessor: (itemId, predId) => request(`/captures/${itemId}/predecessors/${predId}`, { method: 'POST' }),
