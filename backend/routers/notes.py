@@ -290,6 +290,13 @@ def _strip_html(html: str) -> str:
     # e.g. "- · Launch Day" → "- Launch Day"
     text = re.sub(r'^- [·•\u00b7\u2022 ]+', '- ', text, flags=re.MULTILINE)
 
+    # Merge bullet continuation lines. Outlook splits bullet content across
+    # inner <p> tags, producing "- LOB/Markets:\nMedicaid" when the content
+    # should be one line. Merge any non-bullet, non-empty line that follows
+    # a bullet line ending with ":" or a bullet line where the next line
+    # doesn't look like a new sentence/section.
+    text = re.sub(r'^(- [^\n]*:)\n(?!- |\n)(.+)', r'\1 \2', text, flags=re.MULTILINE)
+
     # Normalize spacing. Outlook's nested <p><span><br></span></p> structures
     # produce a blank line between every single line. Strategy:
     # 1. Collapse all runs of blank lines to a single \n (no blank line)
