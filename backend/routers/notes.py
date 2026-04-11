@@ -275,15 +275,16 @@ def _strip_html(html: str) -> str:
     for line in lines:
         # Collapse runs of spaces/tabs to single space, strip edges
         line = re.sub(r'[ \t]+', ' ', line).strip()
-        # Strip redundant bullet chars from list items we already prefixed with "- "
-        # e.g. "- · Launch Day..." → "- Launch Day..."
-        if line.startswith('- '):
-            line = '- ' + line[2:].lstrip('·•\u00b7\u2022 ')
-        else:
-            # Standalone bullet chars on non-list lines — remove them
-            line = line.lstrip('·•\u00b7\u2022 ') if line in ('·', '•', '\u00b7', '\u2022') else line
+        # Strip redundant bullet chars (Outlook puts these inside <li> content)
+        line = line.lstrip('·•\u00b7\u2022 ') if line in ('·', '•', '\u00b7', '\u2022') else line
         cleaned.append(line)
     text = '\n'.join(cleaned)
+
+    # Merge orphaned bullet markers with the next non-empty line.
+    # Outlook's <li><p>content</p></li> produces "- \n\ncontent" after
+    # our tag conversion. Collapse "- " followed by blank lines + content
+    # into a single "- content" line.
+    text = re.sub(r'^- *\n+(?=\S)', '- ', text, flags=re.MULTILINE)
 
     # Collapse 3+ consecutive blank lines to 2
     text = re.sub(r'\n{3,}', '\n\n', text)
