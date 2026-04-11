@@ -55,6 +55,87 @@ export default function NoteDetail() {
     }, 500);
   };
 
+  const saveBody = useCallback((val) => {
+    if (isNew || !note?.id) return;
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      api.updateNote(note.id, { body: val }).catch(() => {});
+    }, 500);
+  }, [isNew, note?.id]);
+
+  // Bullet-point formatting (same as MeetingDetail)
+  const handleBodyKeyDown = (e) => {
+    if (e.key === 'Tab') {
+      const textarea = e.target;
+      const { selectionStart, value } = textarea;
+      const lineStart = value.lastIndexOf('\n', selectionStart - 1) + 1;
+      const currentLine = value.slice(lineStart, selectionStart);
+      const bulletMatch = currentLine.match(/^(\s*)([-*•])\s/);
+      const numberMatchTab = currentLine.match(/^(\s*)(\d+)\.\s/);
+      const listMatch = bulletMatch || numberMatchTab;
+      if (listMatch) {
+        e.preventDefault();
+        let newVal, newCursor;
+        if (e.shiftKey) {
+          const removeCount = listMatch[1].length >= 2 ? 2 : listMatch[1].length;
+          if (removeCount === 0) return;
+          newVal = value.slice(0, lineStart) + currentLine.slice(removeCount) + value.slice(selectionStart);
+          newCursor = selectionStart - removeCount;
+        } else {
+          newVal = value.slice(0, lineStart) + '  ' + value.slice(lineStart);
+          newCursor = selectionStart + 2;
+        }
+        setBody(newVal);
+        saveBody(newVal);
+        setTimeout(() => { textarea.selectionStart = textarea.selectionEnd = newCursor; }, 0);
+        return;
+      }
+    }
+    if (e.key === 'Enter') {
+      const textarea = e.target;
+      const { selectionStart, value } = textarea;
+      const lineStart = value.lastIndexOf('\n', selectionStart - 1) + 1;
+      const currentLine = value.slice(lineStart, selectionStart);
+      const bulletMatch = currentLine.match(/^(\s*)([-*•])\s/);
+      const numberMatch = currentLine.match(/^(\s*)(\d+)\.\s/);
+      if (bulletMatch) {
+        if (currentLine.trim() === bulletMatch[2]) {
+          e.preventDefault();
+          const newVal = value.slice(0, lineStart) + '\n' + value.slice(selectionStart);
+          setBody(newVal);
+          saveBody(newVal);
+          setTimeout(() => { textarea.selectionStart = textarea.selectionEnd = lineStart + 1; }, 0);
+          return;
+        }
+        e.preventDefault();
+        const indent = bulletMatch[1];
+        const bullet = bulletMatch[2];
+        const insertion = `\n${indent}${bullet} `;
+        const newVal = value.slice(0, selectionStart) + insertion + value.slice(selectionStart);
+        setBody(newVal);
+        saveBody(newVal);
+        setTimeout(() => { textarea.selectionStart = textarea.selectionEnd = selectionStart + insertion.length; }, 0);
+      } else if (numberMatch) {
+        const num = parseInt(numberMatch[2], 10);
+        if (currentLine.trim() === `${num}.`) {
+          e.preventDefault();
+          const newVal = value.slice(0, lineStart) + '\n' + value.slice(selectionStart);
+          setBody(newVal);
+          saveBody(newVal);
+          setTimeout(() => { textarea.selectionStart = textarea.selectionEnd = lineStart + 1; }, 0);
+          return;
+        }
+        e.preventDefault();
+        const indent = numberMatch[1];
+        const insertion = `\n${indent}${num + 1}. `;
+        const newVal = value.slice(0, selectionStart) + insertion + value.slice(selectionStart);
+        setBody(newVal);
+        saveBody(newVal);
+        setTimeout(() => { textarea.selectionStart = textarea.selectionEnd = selectionStart + insertion.length; }, 0);
+      }
+    }
+  };
+
   // Create note on first meaningful edit for new notes
   const createIfNew = useCallback(async () => {
     if (!isNew || note?.id) return null;
@@ -237,7 +318,8 @@ export default function NoteDetail() {
         value={body}
         onChange={handleBodyChange}
         onBlur={handleBodyBlur}
-        placeholder="Start writing..."
+        onKeyDown={handleBodyKeyDown}
+        placeholder="Start writing... (use - or * for bullets)"
         className="w-full bg-transparent text-sm text-zinc-200 outline-none resize-none placeholder-zinc-700 leading-relaxed"
         style={{ minHeight: 'calc(100vh - 400px)' }}
         autoFocus={isNew}
