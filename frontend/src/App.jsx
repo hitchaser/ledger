@@ -124,7 +124,6 @@ export default function App() {
             <Route path="/meetings" element={<MeetingsList />} />
             <Route path="/meetings/:id" element={<MeetingDetail refreshKey={refreshKey} onRefresh={refresh} itemUpdate={itemUpdate} />} />
             <Route path="/notes" element={<NotesList />} />
-            <Route path="/notes/new" element={<NoteDetail />} />
             <Route path="/notes/:id" element={<NoteDetail />} />
             <Route path="/meeting/:type/:id" element={<MeetingMode refreshKey={refreshKey} onRefresh={refresh} itemUpdate={itemUpdate} />} />
             <Route path="/digest" element={<DailyDigest />} />
