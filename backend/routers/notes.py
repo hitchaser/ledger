@@ -335,28 +335,37 @@ def _strip_html(html: str) -> str:
     # e.g. "- LOB/Markets:\nvalue" → "- LOB/Markets: value" (only if next isn't a bullet)
     text = re.sub(r'^((  )?- [^\n]*:)\n(?!(  )?- |\n)(.+)', r'\1 \4', text, flags=re.MULTILINE)
 
-    # Normalize spacing: collapse all runs of 2+ newlines to single newline
-    text = re.sub(r'\n{2,}', '\n', text)
+    # Normalize spacing. Outlook wraps every line in <p> tags which produces
+    # double newlines everywhere. Strategy depends on whether the email has
+    # bullet lists (which need aggressive collapsing) or is plain paragraphs
+    # (which need their blank lines preserved as paragraph breaks).
+    has_bullets = bool(re.search(r'^(  )?- ', text, re.MULTILINE))
 
-    # Re-insert paragraph breaks at natural boundaries
-    def _is_bullet(ln):
-        return ln.startswith('- ') or ln.startswith('  - ')
+    if has_bullets:
+        # Aggressive: collapse all double newlines to single
+        text = re.sub(r'\n{2,}', '\n', text)
 
-    lines = text.split('\n')
-    result = []
-    for i, line in enumerate(lines):
-        prev = lines[i - 1] if i > 0 else ''
-        # Blank line when transitioning from bullet block to non-bullet text
-        if _is_bullet(prev) and not _is_bullet(line) and line:
-            result.append('')
-        # Blank line before common email closings
-        elif line.rstrip(', ') in ('Best', 'Thanks', 'Regards', 'Thank you', 'Sincerely', 'Cheers'):
-            if prev:
+        # Re-insert paragraph breaks at natural boundaries
+        def _is_bullet(ln):
+            return ln.startswith('- ') or ln.startswith('  - ')
+
+        lines = text.split('\n')
+        result = []
+        for i, line in enumerate(lines):
+            prev = lines[i - 1] if i > 0 else ''
+            if _is_bullet(prev) and not _is_bullet(line) and line:
                 result.append('')
-        result.append(line)
-    text = '\n'.join(result)
+            elif line.rstrip(', ') in ('Best', 'Thanks', 'Regards', 'Thank you', 'Sincerely', 'Cheers'):
+                if prev:
+                    result.append('')
+            result.append(line)
+        text = '\n'.join(result)
+    else:
+        # Gentle: preserve paragraph breaks (double newlines) but cap at one
+        # blank line. This keeps natural paragraph spacing for prose emails.
+        text = re.sub(r'\n{3,}', '\n\n', text)
 
-    # Collapse any triple+ newlines
+    # Final cleanup: cap at one blank line max
     text = re.sub(r'\n{3,}', '\n\n', text)
 
     return text.strip()
