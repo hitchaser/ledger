@@ -388,15 +388,26 @@ export default function SettingsPage({ theme, onToggleTheme }) {
         <div className="space-y-4">
           {/* AI Enabled */}
           <div className="flex items-center justify-between">
-            <label className="text-sm text-zinc-400">AI Enabled</label>
+            <div className="flex items-center gap-2">
+              <label className="text-sm text-zinc-400">AI Enabled</label>
+              {settings.ai_env_locked && (
+                <span className="text-xs px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400 border border-amber-500/20">
+                  ENV
+                </span>
+              )}
+            </div>
             <button
-              onClick={() => setSettings({ ...settings, ai_enabled: settings.ai_enabled === 'true' ? 'false' : 'true' })}
-              className={`w-10 h-5 rounded-full transition-colors relative ${settings.ai_enabled === 'true' ? 'bg-blue-600' : 'bg-zinc-700'}`}
+              onClick={() => !settings.ai_env_locked && setSettings({ ...settings, ai_enabled: settings.ai_enabled === 'true' ? 'false' : 'true' })}
+              disabled={settings.ai_env_locked}
+              className={`w-10 h-5 rounded-full transition-colors relative ${settings.ai_enabled === 'true' ? 'bg-blue-600' : 'bg-zinc-700'} ${settings.ai_env_locked ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
               <div className="w-4 h-4 rounded-full bg-white absolute top-0.5 transition-all"
                 style={{ left: settings.ai_enabled === 'true' ? '22px' : '2px' }} />
             </button>
           </div>
+          {settings.ai_env_locked && (
+            <p className="text-xs text-amber-400/70 -mt-2">Controlled by AI_ENABLED environment variable — cannot be changed from here</p>
+          )}
 
           {/* Classification Model */}
           <ModelSelector

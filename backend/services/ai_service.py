@@ -1,4 +1,5 @@
 import json
+import os
 import time
 import logging
 import httpx
@@ -52,6 +53,20 @@ def get_setting(key: str, default: str = "") -> str:
     return settings.get(key, defaults.get(key, default))
 
 
+def is_ai_enabled() -> bool:
+    """Check if AI is enabled. Environment variable AI_ENABLED overrides the database setting.
+    When AI_ENABLED env var is set to 'false' or '0', AI is disabled regardless of DB setting."""
+    env_val = os.environ.get("AI_ENABLED")
+    if env_val is not None:
+        return env_val.lower() not in ("false", "0", "no", "off")
+    return get_setting("ai_enabled") == "true"
+
+
+def is_ai_env_locked() -> bool:
+    """Return True if AI_ENABLED env var is set (meaning the setting is externally controlled)."""
+    return os.environ.get("AI_ENABLED") is not None
+
+
 def get_confidence_auto_resolve() -> float:
     return float(get_setting("confidence_auto_resolve", "0.85"))
 
@@ -65,7 +80,7 @@ def get_confidence_suggest() -> float:
 def _call_ai(messages: list, model_key: str = "classification_model",
              format_json: bool = True) -> Optional[str]:
     """Call AI provider based on per-model settings. Returns raw content string."""
-    if get_setting("ai_enabled") != "true":
+    if not is_ai_enabled():
         return None
 
     # Determine provider for this specific model

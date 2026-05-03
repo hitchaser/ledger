@@ -25,12 +25,17 @@ SENSITIVE_KEYS = {"litellm_api_key"}
 
 @router.get("")
 def get_settings(db: Session = Depends(get_db)):
+    from services.ai_service import is_ai_enabled, is_ai_env_locked
     settings = {s.key: s.value for s in db.query(Setting).all()}
     result = {**DEFAULTS, **settings}
     # Mask sensitive values
     for key in SENSITIVE_KEYS:
         if key in result and result[key]:
             result[key] = "••••••••"
+    # AI env override: if AI_ENABLED env var is set, it overrides the DB setting
+    result["ai_env_locked"] = is_ai_env_locked()
+    if result["ai_env_locked"]:
+        result["ai_enabled"] = "true" if is_ai_enabled() else "false"
     return result
 
 

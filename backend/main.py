@@ -12,7 +12,7 @@ from starlette.responses import FileResponse, JSONResponse
 
 from database import engine, SessionLocal, Base
 from models import AIJob, CaptureItem, Person, Project, CaptureItemPerson, CaptureItemProject, LinkSource, MeetingAttendee
-from services.ai_service import classify_capture, get_confidence_auto_resolve, get_confidence_suggest
+from services.ai_service import classify_capture, get_confidence_auto_resolve, get_confidence_suggest, is_ai_enabled
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("ledger")
@@ -424,7 +424,8 @@ async def ai_worker():
                         })
 
                 else:
-                    # AI failed but still do text-scan linking
+                    # AI disabled or failed — still do text-scan linking
+                    ai_disabled = not is_ai_enabled()
                     linked_people_ids = set(
                         r.person_id for r in db.query(CaptureItemPerson).filter_by(capture_item_id=item.id).all()
                     )
@@ -449,8 +450,8 @@ async def ai_worker():
                             ))
                             linked_project_ids.add(proj.id)
                     item.ai_processed_at = datetime.now(timezone.utc)
-                    job.status = "failed"
-                    job.error = "No result from AI"
+                    job.status = "done" if ai_disabled else "failed"
+                    job.error = "AI disabled" if ai_disabled else "No result from AI"
                     db.commit()
 
                     # Broadcast update if text-scan found links
